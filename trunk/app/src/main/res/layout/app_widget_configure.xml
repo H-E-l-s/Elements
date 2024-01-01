@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:textColor="#1BADF0"
+        android:textSize="16dp"
+        android:textAlignment="center"
+        android:text="Please select the mug" />
+<!--
+    <EditText
+        android:id="@+id/appwidget_text"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:inputType="text" />
+
+    <Button
+        android:id="@+id/add_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="@string/add_widget" />
+
+    <Button
+        android:id="@+id/btn_add_widget"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="*Add widget*" />
+-->
+    <ListView android:id="@+id/lv_bt_list"
+        android:layout_below="@+id/add_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:scrollbars="none"
+        android:transcriptMode="alwaysScroll"
+        />
+
+    <ProgressBar
+        android:id="@+id/pb_progress"
+        android:layout_below="@+id/lv_bt_list"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:padding="5dp"
+        android:max="100"
+        android:progressDrawable="@drawable/progress_bar"
+        android:indeterminateDrawable="@drawable/progress_bar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:indeterminateOnly="false" />
+<!-- android:layout_marginTop="10dp" -->
+
+</LinearLayout>

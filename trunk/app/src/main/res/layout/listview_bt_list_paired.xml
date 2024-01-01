@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/bt_dev_listview_background"
+    android:paddingLeft="5dp"
+    android:paddingRight="5dp"
+    android:paddingBottom="5dp">
+
+    <TextView
+        android:id="@+id/tv_list_item_type"
+
+        android:layout_alignParentRight="true"
+        android:layout_alignParentTop="true"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_margin="10dp"
+        android:text="PAIRED"
+        android:textSize="12dp"
+        android:typeface="monospace"
+        android:textStyle="normal"
+        android:textColor="@color/white"/>
+
+    <TextView
+        android:id="@+id/tv_devName"
+        android:layout_alignParentLeft="true"
+        android:layout_alignParentTop="true"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:text="XXXXXXXX"
+        android:typeface="monospace"
+        android:textStyle="normal"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="3dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="3dp"
+        android:textColor="@color/white" />
+
+    <TextView
+        android:id="@+id/tv_mugName"
+        android:layout_alignParentLeft="true"
+        android:layout_below="@+id/tv_devName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="16dp"
+        android:text="XXXXXXXX"
+        android:typeface="monospace"
+        android:textStyle="normal"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="3dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="3dp"
+        android:textColor="@color/white" />
+
+    <TextView
+        android:id="@+id/tv_curTemp"
+        android:layout_alignParentLeft="true"
+        android:layout_below="@+id/tv_mugName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14dp"
+        android:text="Current temperature:"
+        android:typeface="monospace"
+        android:textStyle="normal"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="3dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="3dp"
+        android:textColor="@color/white" />
+
+    <TextView
+        android:id="@+id/tv_battery"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_below="@+id/tv_curTemp"
+        android:layout_alignParentLeft="true"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="3dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="3dp"
+        android:text="Battery:"
+        android:textColor="@color/white"
+        android:textSize="14dp"
+        android:textStyle="normal"
+        android:typeface="monospace" />
+
+    <TextView
+        android:id="@+id/tv_devMac"
+        android:layout_alignParentLeft="true"
+        android:layout_below="@+id/tv_battery"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="14dp"
+        android:text="AAAAAAA"
+        android:layout_marginLeft="20dp"
+        android:layout_marginRight="3dp"
+        android:layout_marginTop="3dp"
+        android:layout_marginBottom="3dp"
+        android:textColor="@color/white" />
+
+</RelativeLayout>
