@@ -1,7 +1,5 @@
 package com.hels.elements;
 
-import static com.hels.elements.ShowAlertDialog.showAlertDialog;
-
 import android.Manifest;
 import android.app.Activity;
 import android.appwidget.AppWidgetManager;
@@ -49,7 +47,7 @@ public class AppWidgetConfigureActivity extends Activity {
 
     BTDeviceListAdapter listAdapter;
 
-    ArrayList<MugParameters> mugsParametersToShow, mugsParametersToCheck;
+    ArrayList<SolarEnergyMeterParameters> semParametersToShow, semParametersToCheck;
 
     ProgressBar pb_progress;
     //EditText mAppWidgetText;
@@ -145,10 +143,10 @@ public class AppWidgetConfigureActivity extends Activity {
 
         pb_progress = (ProgressBar) findViewById(R.id.pb_progress);
 
-        mugsParametersToShow = new ArrayList<>();
-        mugsParametersToCheck = new ArrayList<>();
+        semParametersToShow = new ArrayList<>();
+        semParametersToCheck = new ArrayList<>();
 
-        listAdapter = new BTDeviceListAdapter(this, mugsParametersToShow);
+        listAdapter = new BTDeviceListAdapter(this, semParametersToShow);
         ListView lv_bt_list = (ListView) findViewById(R.id.lv_bt_list);
         lv_bt_list.setAdapter(listAdapter);
 
@@ -159,7 +157,9 @@ public class AppWidgetConfigureActivity extends Activity {
                 MLogger.logToFile(getApplicationContext(), "service.txt", "WCF: onClick selected device", true);
                 // requestToTerminate();
 
-                String deviceAddress = mugsParametersToShow.get(position).getMACAddress();
+                String deviceAddress = semParametersToShow.get(position).getMACAddress();
+
+                /* obsolete
                 if( MugParameters.TYPE_PAIRED ==  mugsParametersToShow.get(position).getType() ) {
                     if(deviceAddress != null)
                         AppPreferences.save(AppWidgetConfigureActivity.this, String.format(Locale.getDefault(), "widget_%d", mAppWidgetId), "mac", mugsParametersToShow.get(position).getMACAddress() );
@@ -179,6 +179,23 @@ public class AppWidgetConfigureActivity extends Activity {
                     showAlertDialog(activity, "AAAAA", "BBBB");
                     requestToBond(deviceAddress);
                 }
+                end of obsolete*/
+
+                MLogger.logToFile(  getApplicationContext(),
+                        "service.txt",
+                        String.format(Locale.getDefault(),  "WCF: onItemClick: %s ", deviceAddress), true);
+
+                AppPreferences.save(AppWidgetConfigureActivity.this, String.format(Locale.getDefault(), "widget_%d", mAppWidgetId), "mac", deviceAddress );
+
+                // It is the responsibility of the configuration activity to update the app widget
+                AppWidgetManager appWidgetManager = AppWidgetManager.getInstance(getApplicationContext());
+                AppWidget.updateAppWidget(getApplicationContext(), appWidgetManager, mAppWidgetId);
+
+                // Make sure we pass back the original appWidgetId
+                Intent resultValue = new Intent();
+                resultValue.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, mAppWidgetId);
+                setResult(RESULT_OK, resultValue);
+                finish();
 
 
             }
@@ -197,7 +214,7 @@ public class AppWidgetConfigureActivity extends Activity {
 
         pb_progress.setIndeterminate(true);
 
-        mugsParametersToShow.clear();
+        semParametersToShow.clear();
         listAdapter.notifyDataSetChanged();
 
         BluetoothManager btManager = (BluetoothManager)getSystemService(Context.BLUETOOTH_SERVICE);
@@ -205,21 +222,21 @@ public class AppWidgetConfigureActivity extends Activity {
 
         Set<BluetoothDevice> pairedDevices = btAdapter.getBondedDevices();
 
-        mugsParametersToCheck.clear();
-        mugsParametersToShow.clear();
+        semParametersToCheck.clear();
+        semParametersToShow.clear();
         listAdapter.notifyDataSetChanged();
 
         if( pairedDevices.size() > 0) {
             for(BluetoothDevice d : pairedDevices) {
                 if( (d.getName() != null) && d.getName().length() >="Ember".length())
                     if("Ember".equals(d.getName().substring(0,"Ember".length())))
-                        mugsParametersToCheck.add( new MugParameters( d.getAddress(), d.getName(), null, null, null, null, null, MugParameters.TYPE_PAIRED, false) );
+                        semParametersToCheck.add( new SolarEnergyMeterParameters( d.getAddress(), d.getName(), null, null, null, null, null, null, null, null, null, SolarEnergyMeterParameters.TYPE_PAIRED, false, null, null) );
             }
         }
 
         Intent intent = new Intent(this, SyncService.class);
         intent.putExtra("task", "paired_info");
-        intent.putParcelableArrayListExtra("mugs_list", mugsParametersToCheck);
+        intent.putParcelableArrayListExtra("mugs_list", semParametersToCheck);
         startService(intent);
 
         boolean res = bindService(new Intent(this, SyncService.class), mConnection, 0);
@@ -322,10 +339,10 @@ public class AppWidgetConfigureActivity extends Activity {
                         pb_progress.setProgress(100);
                     }
                     if(msg.obj != null) {
-                        MugParameters mp = (MugParameters) msg.obj;
+                        SolarEnergyMeterParameters mp = (SolarEnergyMeterParameters) msg.obj;
                         if(mp != null) {
-                            MLogger.logToFile(getApplicationContext(), "service.txt", String.format("WCF: from Service: paired info %s %s S%d", mp.getMugName(), mp.getMACAddress(), mugsParametersToShow.size()), true);
-                            mugsParametersToShow.add(mp);
+                            MLogger.logToFile(getApplicationContext(), "service.txt", String.format("WCF: from Service: paired info %s %s S%d", mp.getMugName(), mp.getMACAddress(), semParametersToShow.size()), true);
+                            semParametersToShow.add(mp);
                             listAdapter.notifyDataSetChanged();
                         }
                     }
@@ -338,17 +355,17 @@ public class AppWidgetConfigureActivity extends Activity {
                         pb_progress.setProgress(100);
                     }
                     if(msg.obj != null) {
-                        MugParameters mp = (MugParameters) msg.obj;
+                        SolarEnergyMeterParameters mp = (SolarEnergyMeterParameters) msg.obj;
                         if(mp != null) {
 
                             MLogger.logToFile(  getApplicationContext(),
                                                 "service.txt",
                                                 String.format(  Locale.getDefault(),
                                                                 "WCF: from Service: discovered info %s S%d",
-                                                                mp.getMACAddress(), mugsParametersToShow.size()), true);
+                                                                mp.getMACAddress(), semParametersToShow.size()), true);
 
                             if(!checkBTDeviceInTheList(mp.getMACAddress()) ) {
-                                mugsParametersToShow.add(mp);
+                                semParametersToShow.add(mp);
                                 listAdapter.notifyDataSetChanged();
                             }
                         }
@@ -357,13 +374,13 @@ public class AppWidgetConfigureActivity extends Activity {
                 case SyncService.MSG_NEW_PAIRED_DEVICE_INFO:
 
                     if(msg.obj != null) {
-                        MugParameters mp = (MugParameters) msg.obj;
+                        SolarEnergyMeterParameters mp = (SolarEnergyMeterParameters) msg.obj;
                         if(mp != null) {
 
                             MLogger.logToFile(  getApplicationContext(),
                                     "service.txt",
                                     String.format(Locale.getDefault(),  "WCF: from Service: bonded %s S%d",
-                                            mp.getMACAddress(), mugsParametersToShow.size()), true);
+                                            mp.getMACAddress(), semParametersToShow.size()), true);
 
                             AppPreferences.save(AppWidgetConfigureActivity.this, String.format(Locale.getDefault(), "widget_%d", mAppWidgetId), "mac", mp.getMACAddress() );
 
@@ -463,7 +480,7 @@ public class AppWidgetConfigureActivity extends Activity {
     //---- End of Fragment-Service communications -------------------------------------------------
 
     boolean checkBTDeviceInTheList(String mac) {
-        for(MugParameters mp : mugsParametersToShow) {
+        for(SolarEnergyMeterParameters mp : semParametersToShow) {
             //MLogger.logToFile(getApplicationContext(), "service.txt", String.format("WCF: %s ? %s", mac, info.getMac()), true);
             if( mac.equals( mp.getMACAddress()) ) {
                 //MLogger.logToFile(getApplicationContext(), "service.txt", String.format("WCF: %s = %s", mac, info.getMac()), true);

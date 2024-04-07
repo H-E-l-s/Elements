@@ -22,8 +22,9 @@ public class MugParameters implements Parcelable {
     private Boolean connected = false;
     private Integer type = TYPE_NOT_DEF;
     private Long mugColor = null;
+    private Long dateTime = null;
 
-    public MugParameters(String mac, String btName, String mugName, Long mugColor, Float currentTemperature, Integer targetTemperature, Integer batteryCharge,  Integer type, Boolean connected) {
+    public MugParameters(String mac, String btName, String mugName, Long mugColor, Float currentTemperature, Integer targetTemperature, Integer batteryCharge,  Integer type, Boolean connected, Long dateTime) {
         this.mac = mac;
         this.btName = btName;
         this.mugName = mugName;
@@ -33,6 +34,7 @@ public class MugParameters implements Parcelable {
         this.connected = connected;
         this.type = type;
         this.mugColor = mugColor;
+        this.dateTime = dateTime;
     }
 
 
@@ -66,6 +68,11 @@ public class MugParameters implements Parcelable {
             mugColor = null;
         } else {
             mugColor = in.readLong();
+        }
+        if(in.readByte() == 0) {
+            dateTime = null;
+        } else {
+            dateTime = in.readLong();
         }
 
     }
@@ -151,6 +158,14 @@ public class MugParameters implements Parcelable {
         return mugColor;
     }
 
+    public void setDateTime(Long dateTime) {
+        this.dateTime = dateTime;
+    }
+
+    public Long getDateTime() {
+        return this.dateTime;
+    }
+
     public boolean checkForData() {
         if( (mugName != null) || (currentTemperature != null) ) return true;
 
@@ -197,6 +212,12 @@ public class MugParameters implements Parcelable {
         } else {
             parcel.writeByte((byte) 1);
             parcel.writeLong(mugColor);
+        }
+        if(dateTime == null) {
+            parcel.writeByte((byte) 0);
+        } else {
+            parcel.writeByte((byte) 1);
+            parcel.writeLong(dateTime);
         }
 
     }

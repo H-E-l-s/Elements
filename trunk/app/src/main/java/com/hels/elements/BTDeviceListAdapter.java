@@ -17,18 +17,18 @@ public class BTDeviceListAdapter extends BaseAdapter {
 
     Context context;
 
-    ArrayList<MugParameters> mugsParameters;
-    TextView tv_devName, tv_devMAC, tv_mugName, tv_curTemp, tv_battery;
+    ArrayList<SolarEnergyMeterParameters> semPList;
+    TextView tv_devName, tv_devMAC, tv_mugName, tv_batVolts, tv_batAmps, tv_battery;
 
-    public BTDeviceListAdapter(Context context, ArrayList<MugParameters> mugsParameters) {
+    public BTDeviceListAdapter(Context context, ArrayList<SolarEnergyMeterParameters> semPList) {
         this.context = context;
-        this.mugsParameters = mugsParameters;
+        this.semPList = semPList;
     }
 
     @Override
     public int getCount() {
         //return infoList.size();
-        return mugsParameters.size();
+        return semPList.size();
     }
 
     @Override
@@ -48,7 +48,7 @@ public class BTDeviceListAdapter extends BaseAdapter {
 
     @Override
     public int getItemViewType(int i) {
-        return mugsParameters.get(i).getType();
+        return semPList.get(i).getType();
     }
 
     @Override
@@ -56,7 +56,7 @@ public class BTDeviceListAdapter extends BaseAdapter {
 
         int listViewItemType = getItemViewType(i);
 
-        MLogger.logToFile( context, "service.txt", String.format(Locale.getDefault(), "BLA: %d : %d : %d", i, mugsParameters.size(), listViewItemType), true );
+        MLogger.logToFile( context, "service.txt", String.format(Locale.getDefault(), "BLA: %d : %d : %d", i, semPList.size(), listViewItemType), true );
 
         switch(listViewItemType) {
             case TYPE_PAIRED:
@@ -65,35 +65,35 @@ public class BTDeviceListAdapter extends BaseAdapter {
                 tv_devName = view.findViewById(R.id.tv_devName);
                 tv_mugName = view.findViewById(R.id.tv_mugName);
                 tv_devMAC = view.findViewById(R.id.tv_devMac);
-                tv_curTemp = view.findViewById(R.id.tv_curTemp);
+                //tv_batVolts = view.findViewById(R.id.tv_);
                 tv_battery = view.findViewById(R.id.tv_battery);
 
-                tv_devMAC.setText(mugsParameters.get(i).getMACAddress());
+                tv_devMAC.setText(semPList.get(i).getMACAddress());
 
-                if( mugsParameters.get(i).getBtName() != null ) {
-                    tv_devName.setText(mugsParameters.get(i).getBtName());
+                if( semPList.get(i).getBtName() != null ) {
+                    tv_devName.setText(semPList.get(i).getBtName());
                     tv_devName.setVisibility(View.VISIBLE);
                 }
                 else {
                     tv_devName.setVisibility(View.GONE);
                 }
 
-                if(mugsParameters.get(i).getMugName() != null ) {
-                    tv_mugName.setText(mugsParameters.get(i).getMugName());
+                if(semPList.get(i).getMugName() != null ) {
+                    tv_mugName.setText(semPList.get(i).getMugName());
                     tv_mugName.setVisibility(View.VISIBLE);
                 }
                 else {
                     tv_mugName.setVisibility(View.GONE);
                 }
 
-                if(mugsParameters.get(i).getCurrentTemperature() != null ) {
-                    tv_curTemp.setText( String.format("Current temperature: %.02fF", mugsParameters.get(i).getCurrentTemperature()) );
-                    tv_curTemp.setVisibility(View.VISIBLE);
-                }
-                else tv_curTemp.setVisibility(View.GONE);
+//                if(semPList.get(i).getCurrentTemperature() != null ) {
+//                    tv_curTemp.setText( String.format("Current temperature: %.02fF", semPList.get(i).getCurrentTemperature()) );
+//                    tv_curTemp.setVisibility(View.VISIBLE);
+//                }
+//                else tv_curTemp.setVisibility(View.GONE);
 
-                if(mugsParameters.get(i).getBatteryCharge() != null ) {
-                    tv_battery.setText( String.format("Battery: %d%%", mugsParameters.get(i).getBatteryCharge()) );
+                if(semPList.get(i).getCPUBatteryCharge() != null ) {
+                    tv_battery.setText( String.format("Battery: %d%%", semPList.get(i).getCPUBatteryCharge()) );
                     tv_battery.setVisibility(View.VISIBLE);
                 }
                 else {
@@ -107,10 +107,10 @@ public class BTDeviceListAdapter extends BaseAdapter {
                 tv_devName = view.findViewById(R.id.tv_devName);
                 tv_devMAC = view.findViewById(R.id.tv_devMac);
 
-                tv_devMAC.setText(mugsParameters.get(i).getMACAddress());
+                tv_devMAC.setText(semPList.get(i).getMACAddress());
 
-                if( mugsParameters.get(i).getBtName() != null ) {
-                    tv_devName.setText(mugsParameters.get(i).getBtName());
+                if( semPList.get(i).getBtName() != null ) {
+                    tv_devName.setText(semPList.get(i).getBtName());
                     tv_devName.setVisibility(View.VISIBLE);
                 }
                 else {

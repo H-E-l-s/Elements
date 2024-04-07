@@ -37,7 +37,7 @@ public class SyncThread implements Runnable {
     public static final int TASK_NO_TASK = 99;
     public static final int TASK_DISCOVER = 1;
     public static final int TASK_GET_PAIRED_INFO = 2;
-    public static final int TASK_MUG_THREAD = 3;
+    public static final int TASK_ELEMENT_THREAD = 3;
 
     private final int STEP_IDLE = 0;
     private final int STEP_START_BLE_SCAN = 50;
@@ -66,12 +66,15 @@ public class SyncThread implements Runnable {
     private final int WTS_LIQUID_STATE = 0x08;
     private final int WTS_MUG_COLOR = 0x10;
     private final int WTS_MUG_NAME = 0x20;
+    private final int WTS_LAST_LOG_REC = 0x21;
+    private final int WTS_DATETIME = 0x22;
+    private final int WTS_LAST_RECORD = 0x23;
 
     private final int WTS_SET_NOTIFICATION = 0x80;
 
-    private final int DISCOVERING_NEW       = 0x01;
-    private final int DISCOVERING_DONE      = 0x02;
-    private final int DISCOVERING_PAIRED    = 0x03;
+    private final int DISCOVERING_NEW = 0x01;
+    private final int DISCOVERING_DONE = 0x02;
+    private final int DISCOVERING_PAIRED = 0x03;
 
 
     private Boolean isRunning = false;
@@ -107,10 +110,8 @@ public class SyncThread implements Runnable {
     private boolean mugGattCharsRead = false;
     private boolean mugGattCharWritten = false;
     private boolean mugGattDescriptorWritten = false;
-
-    private boolean mugTargetTempSet = false;
-    private boolean mugColorSet = false;
-    private boolean mugNameSet = false;
+    private boolean gattRSSIReady = false;
+    private boolean gattMTUUpdated = false;
 
     private boolean btIsEnabled = false;
 
@@ -120,27 +121,10 @@ public class SyncThread implements Runnable {
     int widgetId = 0;
     int task;
 
-    ArrayList<MugParameters> mugsList;
-    int mugsListIdx = 0;
+    ArrayList<SolarEnergyMeterParameters> semPList;
+    int semPListIdx = 0;
 
-    MugParameters mugParametersToSet = null;
-
-//    class Characteristic {
-//        private Integer id, index;
-//        private String name;
-//        private String uuid;
-//        public Characteristic(Integer id, Integer index, String name, String uuid) {
-//            this.id = id;
-//            this.index = index;
-//            this.name = name;
-//        }
-//
-//        public Integer getId() { return  id; }
-//        public Integer getIndex() { return  index; }
-//        public String getName() { return name; }
-//    }
-//
-//    ArrayList<Characteristic> deviceCharacteristics = new ArrayList<Characteristic>();
+    SolarEnergyMeterParameters semParametersToSet = null;
 
     public Boolean isRunning() {
         return isRunning;
@@ -150,11 +134,12 @@ public class SyncThread implements Runnable {
         requestToReRead = true;
     }
 
-    public void setRequestToSetParameters(MugParameters mugParameters) {
-        mugParametersToSet = mugParameters;
+    public void setRequestToSetParameters(SolarEnergyMeterParameters sepParameters) {
+        semParametersToSet = sepParameters;
         requestToSet = true;
     }
-    public void setRequestToBond( String mac) {
+
+    public void setRequestToBond(String mac) {
         macToBond = mac;
         requestToBond = true;
     }
@@ -167,9 +152,9 @@ public class SyncThread implements Runnable {
 
     public SyncThread(Context context, String macAddress, int widgetId, int task) {
 
-        mugsList = new ArrayList<>();
-        mugsList.add(new MugParameters(macAddress, null, null, null, null, null, null, MugParameters.TYPE_PAIRED, false));
-        mugsListIdx = 0;
+        semPList = new ArrayList<>();
+        semPList.add(new SolarEnergyMeterParameters(macAddress, null, null, null, null, null, null, null, null, null, null, SolarEnergyMeterParameters.TYPE_PAIRED, false, null, null));
+        semPListIdx = 0;
 
         this.appContext = context;
 
@@ -177,27 +162,27 @@ public class SyncThread implements Runnable {
         this.widgetId = widgetId;
         this.task = task;
 
-        if(btManager == null)
+        if (btManager == null)
             btManager = (BluetoothManager) appContext.getSystemService(Context.BLUETOOTH_SERVICE);
-        if(btAdapter == null) btAdapter = btManager.getAdapter();
+        if (btAdapter == null) btAdapter = btManager.getAdapter();
 
         context.registerReceiver(mReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
     }
 
-    public SyncThread(Context context, ArrayList<MugParameters> mugsParameters, int task) {
+    public SyncThread(Context context, ArrayList<SolarEnergyMeterParameters> semParameters, int task) {
 
         this.appContext = context;
 
-        this.mugsList = mugsParameters;
+        this.semPList = semParameters;
         this.widgetId = 0;
         this.task = task;
         this.startTask = false;
 
-        mugsListIdx = 0;
+        semPListIdx = 0;
 
-        if(btManager == null)
+        if (btManager == null)
             btManager = (BluetoothManager) appContext.getSystemService(Context.BLUETOOTH_SERVICE);
-        if(btAdapter == null) btAdapter = btManager.getAdapter();
+        if (btAdapter == null) btAdapter = btManager.getAdapter();
 
         context.registerReceiver(mReceiver, new IntentFilter(BluetoothAdapter.ACTION_STATE_CHANGED));
     }
@@ -217,7 +202,8 @@ public class SyncThread implements Runnable {
         step = processSteps[psIdx];
 
         //whatToSync = (WTS_CURRENT_TEMP | WTS_TARGET_TEMP | WTS_BATTERY | WTS_LIQUID_STATE | WTS_MUG_COLOR | WTS_MUG_NAME | WTS_SET_NOTIFICATION);
-        whatToSync = (WTS_MUG_NAME | WTS_CURRENT_TEMP | WTS_TARGET_TEMP | WTS_BATTERY | WTS_MUG_COLOR | WTS_SET_NOTIFICATION);
+        //whatToSync = (WTS_MUG_NAME | WTS_CURRENT_TEMP | WTS_TARGET_TEMP | WTS_BATTERY | WTS_MUG_COLOR | WTS_SET_NOTIFICATION);
+        whatToSync = /*WTS_DATETIME |*/ WTS_LAST_LOG_REC | WTS_SET_NOTIFICATION;
         needsToSync = true;
     }
 
@@ -292,14 +278,12 @@ public class SyncThread implements Runnable {
         EventsTimer timeToConnect = null;
         //EventsTimer timeToReconnect = null;
 
-        //mugParameters = new MugParameters(mugAddress, null,null,null, null, null, false);
-
         isRunning = true;
         long id = Thread.currentThread().getId();
         //Log.d("THREAD", String.format("Started #%d", id));
         MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Started #%d", id), true);
 
-        switch(task) {
+        switch (task) {
             case TASK_DISCOVER:
                 discoverInit();
                 break;
@@ -307,7 +291,7 @@ public class SyncThread implements Runnable {
                 //pairedInfoInit();
                 step = STEP_WAITING_FOR_TASK;
                 break;
-            case TASK_MUG_THREAD:
+            case TASK_ELEMENT_THREAD:
                 syncInit();
                 break;
 
@@ -322,16 +306,16 @@ public class SyncThread implements Runnable {
         final int maxAttempts = 5;
         int attempts = maxAttempts;
 
-        for(; ; ) {
-            if(onTheGo) {
-                switch(step) {
+        for (; ; ) {
+            if (onTheGo) {
+                switch (step) {
                     //--------------------------------------------------------------------------
                     case STEP_WAITING_FOR_TASK:
 
-                        if(startTask) {
+                        if (startTask) {
                             startTask = false;
                             MLogger.logToFile(appContext, "service.txt", String.format("TH : Task %d has started", task), true);
-                            switch(task) {
+                            switch (task) {
                                 case TASK_GET_PAIRED_INFO:
                                     pairedInfoInit();
                                     break;
@@ -339,7 +323,7 @@ public class SyncThread implements Runnable {
                         } else {
                             try {
                                 Thread.sleep(1000);
-                            } catch(InterruptedException e) {
+                            } catch (InterruptedException e) {
                                 //  throw new RuntimeException(e);
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : getting paired info terminating msgClient"), true);
                                 break;
@@ -352,21 +336,21 @@ public class SyncThread implements Runnable {
 //                                //timeToReconnect.cancel();
 //                                timeToReconnect = null;
 //                            }
-                        if(mugGatt != null) mugGatt = null;
+                        if (mugGatt != null) mugGatt = null;
                         try {
                             Thread.sleep(5000);
-                        } catch(InterruptedException e) {
+                        } catch (InterruptedException e) {
                             e.printStackTrace();
                         }
 
                         long timeNow = System.currentTimeMillis() / 1000;
-                        if((timeNow - tsWaitBTLastTime) > 15 * 60) {
+                        if ((timeNow - tsWaitBTLastTime) > 15 * 60) {
                             MLogger.logToFile(appContext, "service.txt", "TH : BT is disabled", true);
                             tsWaitBTLastTime = timeNow;
                             updateWidget();
                         }
 
-                        if(btIsEnabled) {
+                        if (btIsEnabled) {
                             tsWaitBTLastTime = 0;
                             syncInit();
                             MLogger.logToFile(appContext, "service.txt", "TH : Adapter is ON - Sync enabling", true);
@@ -375,30 +359,39 @@ public class SyncThread implements Runnable {
                         break;
                     case STEP_IDLE:
 
-                        if(checkStop()) {
+                        if (checkStop()) {
                             step = STEP_QUIT;
                             break;
                         }
-                        if(!checkBTEnabled()) {
+                        if (!checkBTEnabled()) {
                             break;
                         }
 
                         long tsLongNow = System.currentTimeMillis() / 1000;
-                        if((tsLongNow - tsLongLast) > 15 * 60) {
-                            MLogger.logToFile(appContext, "service.txt", "TH : Alive " + mugBleDevice.getAddress(), true);
+                        if ((tsLongNow - tsLongLast) > 15 * 60) {
+
+                            String status = "unknown";
+                            if(mugBleDevice != null) {
+                                if (isMugGattConnected(mugBleDevice) && (mugGatt != null)) {
+                                    status = "connected";
+                                }
+                                else status = "not connected";
+                            }
+
+                            MLogger.logToFile(appContext, "service.txt", "TH : Alive " + mugBleDevice.getAddress() + " " + status, true);
                             tsLongLast = tsLongNow;
                         }
 
-                        if(!mugGattConnected) {
+                        if (!mugGattConnected) {
                             try {
                                 Thread.sleep(3000);
-                            } catch(InterruptedException e) {
+                            } catch (InterruptedException e) {
                                 e.printStackTrace();
                             }
                             break;
                         }
 
-                        if(requestToSet) {
+                        if (requestToSet) {
 
                             MLogger.logToFile(appContext, "service.txt", "TH : request to set " + mugBleDevice.getAddress(), true);
                             processSteps = new int[]{
@@ -414,17 +407,17 @@ public class SyncThread implements Runnable {
                             break;
                         }
 
-                        if(requestToReRead) {
+                        if (requestToReRead) {
                             MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d) Request to reread %s", id, mugAddress), true);
                             syncInit();
                             requestToReRead = false;
                         }
 
-                        if(needsToSync) {
+                        if (needsToSync) {
                             id = Thread.currentThread().getId();
                             MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d) Needs to sync " + mugAddress, id), true);
 
-                            if(ActivityCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                            if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                                 return;
                             }
 
@@ -438,7 +431,7 @@ public class SyncThread implements Runnable {
 //                                        ButtonsFragment.HM_ID_USER_MSG_TO_LOG,
 //                                        sss);
 
-                            if(connectedBLEDevices.contains(mugBleDevice) == false) {
+                            if (connectedBLEDevices.contains(mugBleDevice) == false) {
 //                                    for(int i = 0; i < processSteps.length; i++) {
 //                                        if(processSteps[i] == STEP_BLE_GATT_CONNECT) {
 //                                            psIdx = i;
@@ -474,11 +467,10 @@ public class SyncThread implements Runnable {
 //                                        }
 //                                    }
                             }
-                        }
-                        else {
+                        } else {
                             try {
                                 Thread.sleep(300);
-                            } catch(InterruptedException e) {
+                            } catch (InterruptedException e) {
                                 e.printStackTrace();
                             }
                         }
@@ -542,18 +534,18 @@ public class SyncThread implements Runnable {
 //                                }
 //                            }
 
-                        if(btManager == null)
+                        if (btManager == null)
                             btManager = (BluetoothManager) appContext.getSystemService(Context.BLUETOOTH_SERVICE);
-                        if(btAdapter == null) btAdapter = btManager.getAdapter();
+                        if (btAdapter == null) btAdapter = btManager.getAdapter();
 
-                        if(btAdapter == null) {
+                        if (btAdapter == null) {
                             // BT isn't supported
                             btIsEnabled = false;
                             step = STEP_WAIT_BT;
                             MLogger.logToFile(appContext, "service.txt", "TH : Adapter is NULL", true);
 
                             break;
-                        } else if(!btAdapter.isEnabled()) {
+                        } else if (!btAdapter.isEnabled()) {
                             btIsEnabled = false;
                             step = STEP_WAIT_BT;
                             MLogger.logToFile(appContext, "service.txt", "TH : Adapter is Disabled", true);
@@ -563,15 +555,15 @@ public class SyncThread implements Runnable {
                             btIsEnabled = true;
                         }
 
-                        if(mugBleDevice == null)
+                        if (mugBleDevice == null)
                             mugBleDevice = btAdapter.getRemoteDevice(mugAddress);
 
 
-                        if(checkStop() || !checkBTEnabled()) {
+                        if (checkStop() || !checkBTEnabled()) {
                             break;
                         }
 
-                        if( isMugGattConnected(mugBleDevice) && (mugGatt != null) ) {
+                        if (isMugGattConnected(mugBleDevice) && (mugGatt != null)) {
                             MLogger.logToFile(appContext, "service.txt", "TH : Mug is already connected " + mugAddress, true);
                         } else {
 
@@ -579,44 +571,9 @@ public class SyncThread implements Runnable {
 
                             mugGattConnected = false;
                             mugGattDiscovered = false;
-/*
-                                (timeToConnect = new EventsTimer()).start(10000);
-                                while(!mugGattConnected && !timeToConnect.isReady()) {
-                                    if(checkStop()) {
-                                        break;
-                                    }
-                                    if(!checkBTEnabled()) {
-                                        break;
-                                    }
-                                    //                                MessageToActivity.sendMessageToActivity(msgHandler,
-                                    //                                        ButtonsFragment.HM_ID_USER_MSG_TO_LOG,
-                                    //                                        String.format("GATT connecting(%d)...", counter++));
-                                    Log.d("BLE", String.format("Connecting..."));
-
-
-                                    try {
-                                        if(mugGatt == null) {
-                                            MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT is null"), true);
-                                            Log.d("BLE", String.format("TH : GATT is null"));
-                                            mugGatt = mugBleDevice.connectGatt(appContext, true, bleGattCallback);
-
-                                        } else {
-                                            mugGatt.connect();
-                                        }
-
-                                        threadSleep(100);
-                                    } catch(Exception e) {
-                                        String s = String.format("TH : GATT connect exception %s", e.toString());
-                                        MLogger.logToFile(appContext, "service.txt", s, true);
-                                        Log.d("BLE", s);
-                                    }
-                                }
-*/
-                            //------------------------------------------------------------------
-                            // (timeToConnect = new EventsTimer()).start(10000);
 
                             try {
-                                if(mugGatt == null) {
+                                if (mugGatt == null) {
                                     MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT is null. connectGATT..."), true);
                                     mugGatt = mugBleDevice.connectGatt(appContext, true, bleGattCallback);
 
@@ -626,13 +583,13 @@ public class SyncThread implements Runnable {
                                 }
 
                                 //threadSleep(100);
-                            } catch(Exception e) {
+                            } catch (Exception e) {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT connect exception %s", e.toString()), true);
                             }
 
                             (timeToConnect = new EventsTimer()).start(10000);
 
-                            while(!mugGattConnected && !checkStop() && checkBTEnabled()) {
+                            while (!mugGattConnected && !checkStop() && checkBTEnabled()) {
                                 // will stay here until GATT is connected or BT is disabled,
                                 // or user terminates everything
 //                                    if(checkStop()) {
@@ -642,7 +599,7 @@ public class SyncThread implements Runnable {
 //                                        break;
 //                                    }
 
-                                if(timeToConnect.isReady())
+                                if (timeToConnect.isReady())
                                     threadSleep(10000);             // increase sleep time if Mug wasn't found in first 10 sec
                                 else threadSleep(1000);    //
 
@@ -650,7 +607,7 @@ public class SyncThread implements Runnable {
                                         String.format(Locale.getDefault(), "TH : [ %d ] Waiting for GATT connected %s", Thread.currentThread().getId(), mugAddress), true);
                             }
                             timeToConnect = null;
-                            if(!mugGattConnected) {
+                            if (!mugGattConnected) {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT connection is terminated."), true);
                                 break; // connecting was terminated, exit from GATT connect step
                             }
@@ -664,30 +621,38 @@ public class SyncThread implements Runnable {
 //                                }
                         }
 
-                        if(checkStop()) {
+                        if (checkStop()) {
                             break;
                         }
-                        if(!checkBTEnabled()) {
+                        if (!checkBTEnabled()) {
                             break;
                         }
                         //if( !mugGattConnected ) { psIdx = 0; step = processSteps[psIdx]; break; }
+
+                        gattMTUUpdated = false;
+                        mugGatt.requestMtu(100);
+                        while(!gattMTUUpdated);
+
+//                        gattRSSIReady = false;
+//                        mugGatt.readRemoteRssi();
+//                        while(!gattRSSIReady);
 
                         MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT Connected. Service discovering..."), true);
 
                         mugGatt.discoverServices();
 
-                        while(!mugGattDiscovered) {
-                            if(checkStop()) {
+                        while (!mugGattDiscovered) {
+                            if (checkStop()) {
                                 break;
                             }
-                            if(!checkBTEnabled()) {
+                            if (!checkBTEnabled()) {
                                 break;
                             }
                         }
-                        if(checkStop()) {
+                        if (checkStop()) {
                             break;
                         }
-                        if(!checkBTEnabled()) {
+                        if (!checkBTEnabled()) {
                             break;
                         }
 
@@ -712,63 +677,136 @@ public class SyncThread implements Runnable {
                         break;
                     case STEP_BLE_READ_CHAR:
                         MLogger.logToFile(appContext, "service.txt", "TH : Reading", true);
-                        if(ReadQueue != null) {
+                        if (ReadQueue != null) {
                             MLogger.logToFile(appContext, "service.txt", "TH : Queue not empty", true);
 
-                            if(mugGattConnected == false) {
+                            if (mugGattConnected == false) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Queue not empty BUT GATT disconnected. Cancel reading.", true);
-                                whatToSync = 0; needsToSync = false;
+                                whatToSync = 0;
+                                needsToSync = false;
                                 step = processSteps[++psIdx];
                                 break;
                             }
 
-//                            if((whatToSync & WTS_MUG_NAME) != 0) {
-//
-////                                mugNameSet = false;
-////                                ReadQueue.get(0).setValue("Test");
-////                                //ReadQueue.get(0).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT);
-////                                ReadQueue.get(0).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-////                                mugGatt.writeCharacteristic(ReadQueue.get(0));
-////
-////                                while(!mugNameSet) ;
-//
-//                                mugGattCharsRead = false;
-//                                mugGatt.readCharacteristic(ReadQueue.get(0));
-//                                while(!mugGattCharsRead) {
-//                                }
-//
-//                                whatToSync &= ~WTS_MUG_NAME;
-//                            }
+                            gattRSSIReady = false;
+                            mugGatt.readRemoteRssi();
+                            while(!gattRSSIReady);
+
+                            //---- read DateTime --------------------------------------------------
+                            if ((whatToSync & WTS_DATETIME) != 0) {
+                                MLogger.logToFile(appContext, "service.txt", "TH : Reading DateTime", true);
+                                mugGattCharsRead = false;
+                                mugGatt.readCharacteristic(ReadQueue.get(0));   // DateTime
+                                int timeout = 5000 / 10;  //5 sec
+                                while (!mugGattCharsRead) {
+                                    try {
+                                        Thread.sleep(10);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                    if (--timeout <= 0) {
+                                        MLogger.logToFile(appContext, "service.txt",
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Reading DateTime TIMEOUT %d", timeout), true);
+                                        break;
+                                    }
+                                }
+                                if (timeout > 0) {
+                                    whatToSync &= ~WTS_DATETIME;
+                                    attempts = maxAttempts;
+                                } else {
+                                    if (attempts > 0) {
+                                        attempts--;
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading DateTime Attempts left: %d", attempts), true);
+                                        break;
+                                    } else {
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading DateTime UNABLE to read"), true);
+                                        whatToSync &= ~WTS_DATETIME;
+                                        attempts = maxAttempts;
+                                    }
+                                }
+                                updateWidget();
+                            }
+                            //---- read DateTime --------------------------------------------------
+                            if (checkStop()) {
+                                break;
+                            }
+                            if (!checkBTEnabled()) {
+                                break;
+                            }
+                            //---- read Last Log record -----------------------------------------------
+                            if ((whatToSync & WTS_LAST_LOG_REC) != 0) {
+                                MLogger.logToFile(appContext, "service.txt", "TH : Reading LLR", true);
+                                mugGattCharsRead = false;
+                                mugGatt.readCharacteristic(ReadQueue.get(1));
+                                int timeout = 5000 / 10;  //5 sec
+                                while (!mugGattCharsRead) {
+                                    try {
+                                        Thread.sleep(10);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                    if (--timeout <= 0) {
+                                        MLogger.logToFile(appContext, "service.txt",
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Reading LLR TIMEOUT %d", timeout), true);
+                                        break;
+                                    }
+                                }
+                                if (timeout > 0) {
+                                    whatToSync &= ~WTS_LAST_LOG_REC;
+                                    attempts = maxAttempts;
+                                } else {
+                                    if (attempts > 0) {
+                                        attempts--;
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading LLR Attempts left: %d", attempts), true);
+                                        break;
+                                    } else {
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading LLR UNABLE to read"), true);
+                                        whatToSync &= ~WTS_LAST_LOG_REC;
+                                        attempts = maxAttempts;
+                                    }
+                                }
+                                updateWidget();
+                            }
+
+                            if (checkStop()) {
+                                break;
+                            }
+                            if (!checkBTEnabled()) {
+                                break;
+                            }
+                            //---- Last Log record -----------------------------------------------
 
                             //---- Mug name ------------------------------------------------------
-                            if((whatToSync & WTS_MUG_NAME) != 0) {
+                            if ((whatToSync & WTS_MUG_NAME) != 0) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Mug name " + mugAddress, true);
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(0));
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharsRead) {
+                                while (!mugGattCharsRead) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt",
-                                                String.format(  Locale.getDefault(),
-                                                        "TH : Reading Mug name TIMEOUT %d",timeout), true);
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Reading Mug name TIMEOUT %d", timeout), true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     whatToSync &= ~WTS_MUG_NAME;
                                     attempts = maxAttempts;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Reading Mug name Attempts left: %d %s", attempts, mugAddress), true);
                                         break;
                                     } else {
-                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Mug name UNABLE to read %s",  mugAddress), true);
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Mug name UNABLE to read %s", mugAddress), true);
                                         whatToSync &= ~WTS_MUG_NAME;
                                         attempts = maxAttempts;
                                     }
@@ -776,38 +814,38 @@ public class SyncThread implements Runnable {
                                 updateWidget();
                             }
 
-                            if(checkStop()) {
+                            if (checkStop()) {
                                 break;
                             }
-                            if(!checkBTEnabled()) {
+                            if (!checkBTEnabled()) {
                                 break;
                             }
 
                             //---- End of Mug name -----------------------------------------------
 
-                            if((whatToSync & WTS_CURRENT_TEMP) != 0) {
+                            if ((whatToSync & WTS_CURRENT_TEMP) != 0) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Tcurrent", true);
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(1));
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharsRead) {
+                                while (!mugGattCharsRead) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt",
-                                                            String.format(  Locale.getDefault(),
-                                                                            "TH : Reading Tcurrent TIMEOUT %d",timeout), true);
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Reading Tcurrent TIMEOUT %d", timeout), true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     whatToSync &= ~WTS_CURRENT_TEMP;
                                     attempts = maxAttempts;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Tcurrent Attempts left: %d", attempts), true);
                                         break;
@@ -820,37 +858,37 @@ public class SyncThread implements Runnable {
                                 updateWidget();
                             }
 
-                            if(checkStop()) {
+                            if (checkStop()) {
                                 break;
                             }
-                            if(!checkBTEnabled()) {
+                            if (!checkBTEnabled()) {
                                 break;
                             }
 
                             //---- Target temperature ---------------------------------------------
-                            if((whatToSync & WTS_TARGET_TEMP) != 0) {
+                            if ((whatToSync & WTS_TARGET_TEMP) != 0) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Ttarget", true);
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(2));
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharsRead) {
+                                while (!mugGattCharsRead) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt",
-                                                String.format(  Locale.getDefault(),
-                                                        "TH : Reading Ttarget TIMEOUT %d",timeout), true);
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Reading Ttarget TIMEOUT %d", timeout), true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     whatToSync &= ~WTS_TARGET_TEMP;
                                     attempts = maxAttempts;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Ttarget Attempts left: %d", attempts), true);
                                         break;
@@ -863,44 +901,44 @@ public class SyncThread implements Runnable {
                                 updateWidget();
                             }
 
-                            if(checkStop()) {
+                            if (checkStop()) {
                                 break;
                             }
-                            if(!checkBTEnabled()) {
+                            if (!checkBTEnabled()) {
                                 break;
                             }
 
                             //---- End of Target temperature --------------------------------------
 
                             //---- Mug color ------------------------------------------------------
-                            if((whatToSync & WTS_MUG_COLOR) != 0) {
+                            if ((whatToSync & WTS_MUG_COLOR) != 0) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Mug color " + mugAddress, true);
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(6));
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharsRead) {
+                                while (!mugGattCharsRead) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt",
-                                                String.format(  Locale.getDefault(),
-                                                        "TH : Reading Mug color TIMEOUT %d",timeout), true);
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Reading Mug color TIMEOUT %d", timeout), true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     whatToSync &= ~WTS_MUG_COLOR;
                                     attempts = maxAttempts;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Reading Mug color Attempts left: %d %s", attempts, mugAddress), true);
                                         break;
                                     } else {
-                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Mug color UNABLE to read %s",  mugAddress), true);
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Mug color UNABLE to read %s", mugAddress), true);
                                         whatToSync &= ~WTS_MUG_COLOR;
                                         attempts = maxAttempts;
                                     }
@@ -908,10 +946,10 @@ public class SyncThread implements Runnable {
                                 updateWidget();
                             }
 
-                            if(checkStop()) {
+                            if (checkStop()) {
                                 break;
                             }
-                            if(!checkBTEnabled()) {
+                            if (!checkBTEnabled()) {
                                 break;
                             }
 
@@ -951,7 +989,7 @@ public class SyncThread implements Runnable {
 //                                ReadQueue.get(0).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
 //                                mugGatt.writeCharacteristic(ReadQueue.get(0));
 
-                           //     while(!mugTargetTempSet);
+                            //     while(!mugTargetTempSet);
                             //------------------------------------------------
 //                            if((whatToSync & WTS_TARGET_TEMP) != 0) {
 //                                mugGattCharsRead = false;
@@ -960,27 +998,27 @@ public class SyncThread implements Runnable {
 //                                whatToSync &= ~WTS_TARGET_TEMP;
 //                            }
 
-                            if((whatToSync & WTS_BATTERY) != 0) {
+                            if ((whatToSync & WTS_BATTERY) != 0) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Battery", true);
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(3));
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharsRead) {
+                                while (!mugGattCharsRead) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt", "TH : Reading Battery TIMEOUT", true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     whatToSync &= ~WTS_BATTERY;
                                     attempts = maxAttempts;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Battery Attempts left: %d", attempts), true);
                                         break;
@@ -993,43 +1031,43 @@ public class SyncThread implements Runnable {
                                 updateWidget();
                             }
 
-                            if(checkStop()) {
+                            if (checkStop()) {
                                 break;
                             }
-                            if(!checkBTEnabled()) {
+                            if (!checkBTEnabled()) {
                                 break;
                             }
 
-                            if((whatToSync & WTS_LIQUID_STATE) != 0) {
+                            if ((whatToSync & WTS_LIQUID_STATE) != 0) {
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(4));
-                                while(!mugGattCharsRead) ;
+                                while (!mugGattCharsRead) ;
                                 whatToSync &= ~WTS_LIQUID_STATE;
                             }
 
-                            if((whatToSync & WTS_MUG_COLOR) != 0) {
+                            if ((whatToSync & WTS_MUG_COLOR) != 0) {
                                 mugGattCharsRead = false;
                                 mugGatt.readCharacteristic(ReadQueue.get(6));
-                                while(!mugGattCharsRead) ;
+                                while (!mugGattCharsRead) ;
                                 whatToSync &= ~WTS_MUG_COLOR;
                             }
 
-                            if((whatToSync & WTS_SET_NOTIFICATION) != 0) {
+                            if ((whatToSync & WTS_SET_NOTIFICATION) != 0) {
                                 mugGattDescriptorWritten = false;
-                                mugGatt.setCharacteristicNotification(ReadQueue.get(5), true);
+                                mugGatt.setCharacteristicNotification(ReadQueue.get(2), true);
 
                                 UUID CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
-                                BluetoothGattDescriptor desc = ReadQueue.get(5).getDescriptor(CONFIG_DESCRIPTOR);
+                                BluetoothGattDescriptor desc = ReadQueue.get(2).getDescriptor(CONFIG_DESCRIPTOR);
                                 desc.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
                                 mugGatt.writeDescriptor(desc);
 
-                                while(!mugGattDescriptorWritten) ;
+                                while (!mugGattDescriptorWritten) ;
                                 whatToSync &= ~WTS_SET_NOTIFICATION;
 
                                 MLogger.logToFile(appContext, "service.txt", "TH : Notifictions set...", true);
                             }
 
-                            if(whatToSync == 0) {
+                            if (whatToSync == 0) {
                                 needsToSync = false;
                                 MLogger.logToFile(appContext, "service.txt", "TH : sync is done", true);
                             } else {
@@ -1049,22 +1087,71 @@ public class SyncThread implements Runnable {
 //                            //setTimeout(5000);
 //
 
-                        if(needsToSync == false) step = processSteps[++psIdx];
+                        if (needsToSync == false) step = processSteps[++psIdx];
 
                         break;
                     //---- Write chracteristics ---------------------------------------------------
                     case STEP_BLE_WRITE_CHAR:
-                        if(mugParametersToSet == null) {
+                        if ( semParametersToSet == null) {
                             MLogger.logToFile(appContext, "service.txt", "TH : Writing - NOTHING", true);
                             step = processSteps[++psIdx];
                             break;
                         }
+                        //---- DateTime -----------------------------------------------------------
+                        attempts = maxAttempts;
+                        Long dateTime = semParametersToSet.getDateTime();
+                        if (dateTime != null) {
+
+                            while (attempts > 0) {
+
+                                MLogger.logToFile(appContext, "service.txt", String.format("TH : Writing DateTime %08X %s ",
+                                                dateTime,
+                                                new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000))),
+                                        true);
+                                mugGattCharWritten = false;
+
+                                ReadQueue.get(0).setValue(new byte[]{(byte) (dateTime >>> 24), (byte) (dateTime >>> 16), (byte) (dateTime >> 8), (byte) (dateTime & 0xFF)});
+
+                                ReadQueue.get(0).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+                                mugGatt.writeCharacteristic(ReadQueue.get(0));
+
+                                int timeout = 5000 / 10;  //5 sec
+                                while (!mugGattCharWritten) {
+                                    try {
+                                        Thread.sleep(10);
+                                    } catch (InterruptedException e) {
+                                        throw new RuntimeException(e);
+                                    }
+                                    if (--timeout <= 0) {
+                                        MLogger.logToFile(appContext, "service.txt",
+                                                String.format(Locale.getDefault(),
+                                                        "TH : Writing DateTime TIMEOUT %d", timeout), true);
+                                        break;
+                                    }
+                                }
+                                if (timeout > 0) {
+
+                                    MLogger.logToFile(appContext, "service.txt", "TH : Writing DateTime - DONE", true);
+                                    attempts = maxAttempts;
+                                    break;
+                                } else {
+                                    if (attempts > 0) {
+                                        attempts--;
+                                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Writing DateTime Attempts left: %d", attempts), true);
+                                    } else {
+                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading DateTime UNABLE to write"), true);
+                                    }
+                                }
+                            }
+                        }
+                        //---- DateTime ----------------------------------------------------------
+
                         //---- Mug name -----------------------------------------------------------
                         attempts = maxAttempts;
-                        String name = mugParametersToSet.getMugName();
-                        if( name != null ) {
+                        String name = semParametersToSet.getMugName();
+                        if (name != null) {
                             // ??? Need to check GATT connected ???
-                            while(attempts > 0) {
+                            while (attempts > 0) {
 
                                 MLogger.logToFile(appContext, "service.txt", "TH : Writing Name " + name, true);
                                 mugGattCharWritten = false;
@@ -1075,26 +1162,26 @@ public class SyncThread implements Runnable {
                                 //while(!mugGattCharWritten);
 
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharWritten) {
+                                while (!mugGattCharWritten) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt",
                                                 String.format(Locale.getDefault(),
                                                         "TH : Writing Name TIMEOUT %d", timeout), true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     //whatToSync &= ~WTS_CURRENT_TEMP;
                                     MLogger.logToFile(appContext, "service.txt", "TH : Writing Name - DONE", true);
                                     attempts = maxAttempts;
                                     break;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format("TH : Writing Name Attempts left: %d", attempts), true);
                                         //break;
@@ -1108,67 +1195,67 @@ public class SyncThread implements Runnable {
                         }
                         //---- Mug name ----------------------------------------------------------
                         //---- Target temperature -------------------------------------------------
-                        attempts = maxAttempts;
-                        Integer t = mugParametersToSet.getTargetTemperature();
-                        if( t != null ) {
-                            // ??? Need to check GATT connected ???
-                            while(attempts > 0) {
-
-                                MLogger.logToFile(appContext, "service.txt", "TH : Writing Tcurrent " + t.toString(), true);
-                                mugGattCharWritten = false;
-
-                                ReadQueue.get(2).setValue(t, BluetoothGattCharacteristic.FORMAT_UINT16, 0);
-                                ReadQueue.get(2).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-                                mugGatt.writeCharacteristic(ReadQueue.get(2));
-                                //while(!mugGattCharWritten);
-
-                                int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharWritten) {
-                                    try {
-                                        Thread.sleep(10);
-                                    } catch(InterruptedException e) {
-                                        throw new RuntimeException(e);
-                                    }
-                                    if(--timeout <= 0) {
-                                        MLogger.logToFile(appContext, "service.txt",
-                                                String.format(Locale.getDefault(),
-                                                        "TH : Writing Ttrgt TIMEOUT %d", timeout), true);
-                                        break;
-                                    }
-                                }
-                                if(timeout > 0) {
-                                    //whatToSync &= ~WTS_CURRENT_TEMP;
-                                    MLogger.logToFile(appContext, "service.txt", "TH : Writing Tcurrent - DONE", true);
-                                    attempts = maxAttempts;
-                                    break;
-                                } else {
-                                    if(attempts > 0) {
-                                        attempts--;
-                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Writing Ttrgt Attempts left: %d", attempts), true);
-                                        //break;
-                                    } else {
-                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Ttrgt UNABLE to write"), true);
-                                        //whatToSync &= ~WTS_CURRENT_TEMP;
-                                        //attempts = maxAttempts;
-                                    }
-                                }
-                            }
-                        }
+//                        attempts = maxAttempts;
+//                        Integer t = semParametersToSet.getTargetTemperature();
+//                        if (t != null) {
+//                            // ??? Need to check GATT connected ???
+//                            while (attempts > 0) {
+//
+//                                MLogger.logToFile(appContext, "service.txt", "TH : Writing Tcurrent " + t.toString(), true);
+//                                mugGattCharWritten = false;
+//
+//                                ReadQueue.get(2).setValue(t, BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+//                                ReadQueue.get(2).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+//                                mugGatt.writeCharacteristic(ReadQueue.get(2));
+//                                //while(!mugGattCharWritten);
+//
+//                                int timeout = 5000 / 10;  //5 sec
+//                                while (!mugGattCharWritten) {
+//                                    try {
+//                                        Thread.sleep(10);
+//                                    } catch (InterruptedException e) {
+//                                        throw new RuntimeException(e);
+//                                    }
+//                                    if (--timeout <= 0) {
+//                                        MLogger.logToFile(appContext, "service.txt",
+//                                                String.format(Locale.getDefault(),
+//                                                        "TH : Writing Ttrgt TIMEOUT %d", timeout), true);
+//                                        break;
+//                                    }
+//                                }
+//                                if (timeout > 0) {
+//                                    //whatToSync &= ~WTS_CURRENT_TEMP;
+//                                    MLogger.logToFile(appContext, "service.txt", "TH : Writing Tcurrent - DONE", true);
+//                                    attempts = maxAttempts;
+//                                    break;
+//                                } else {
+//                                    if (attempts > 0) {
+//                                        attempts--;
+//                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Writing Ttrgt Attempts left: %d", attempts), true);
+//                                        //break;
+//                                    } else {
+//                                        MLogger.logToFile(appContext, "service.txt", String.format("TH : Reading Ttrgt UNABLE to write"), true);
+//                                        //whatToSync &= ~WTS_CURRENT_TEMP;
+//                                        //attempts = maxAttempts;
+//                                    }
+//                                }
+//                            }
+//                        }
                         //---- Target temperature -------------------------------------------------
                         //---- Mug color ----------------------------------------------------------
                         attempts = maxAttempts;
-                        Long color = mugParametersToSet.getMugColor();
-                        if( color != null ) {
+                        Long color = semParametersToSet.getMugColor();
+                        if (color != null) {
 
-                            while(attempts > 0) {
+                            while (attempts > 0) {
 
-                                MLogger.logToFile(appContext, "service.txt", String.format( "TH : Writing Color %02X%02X%02X",
-                                                                                            (byte)(color >>> 16), (byte)(color >>> 8), (byte)(color & 0xFF) ),
-                                                                                            true);
+                                MLogger.logToFile(appContext, "service.txt", String.format("TH : Writing Color %02X%02X%02X",
+                                                (byte) (color >>> 16), (byte) (color >>> 8), (byte) (color & 0xFF)),
+                                        true);
                                 mugGattCharWritten = false;
 
                                 //ReadQueue.get(6).setValue(new byte[]{(byte)(color >>> 16), (byte)(color >>> 8), (byte)(color & 0xFF), (byte)0xFF });
-                                ReadQueue.get(6).setValue(new byte[]{(byte)(color >>> 16), (byte)(color >>> 8), (byte)(color & 0xFF), (byte)0xFF });
+                                ReadQueue.get(6).setValue(new byte[]{(byte) (color >>> 16), (byte) (color >>> 8), (byte) (color & 0xFF), (byte) 0xFF});
 
                                 //ReadQueue.get(6).setValue(t, BluetoothGattCharacteristic.FORMAT_UINT16, 0);
                                 ReadQueue.get(6).setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
@@ -1176,26 +1263,26 @@ public class SyncThread implements Runnable {
                                 //while(!mugGattCharWritten);
 
                                 int timeout = 5000 / 10;  //5 sec
-                                while(!mugGattCharWritten) {
+                                while (!mugGattCharWritten) {
                                     try {
                                         Thread.sleep(10);
-                                    } catch(InterruptedException e) {
+                                    } catch (InterruptedException e) {
                                         throw new RuntimeException(e);
                                     }
-                                    if(--timeout <= 0) {
+                                    if (--timeout <= 0) {
                                         MLogger.logToFile(appContext, "service.txt",
                                                 String.format(Locale.getDefault(),
                                                         "TH : Writing Color TIMEOUT %d", timeout), true);
                                         break;
                                     }
                                 }
-                                if(timeout > 0) {
+                                if (timeout > 0) {
                                     //whatToSync &= ~WTS_CURRENT_TEMP;
                                     MLogger.logToFile(appContext, "service.txt", "TH : Writing Color - DONE", true);
                                     attempts = maxAttempts;
                                     break;
                                 } else {
-                                    if(attempts > 0) {
+                                    if (attempts > 0) {
                                         attempts--;
                                         MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Writing Color Attempts left: %d", attempts), true);
                                         //break;
@@ -1214,10 +1301,19 @@ public class SyncThread implements Runnable {
                         //if(mugGattCharWritten == false)
                         step = processSteps[++psIdx];
 
-                    break;
+                        break;
                     //---- End of Write chracteristics --------------------------------------------
                     case STEP_STANDBY:
-                        MLogger.logToFile(appContext, "service.txt", "TH : Standby", true);
+
+                        String status = "unknown";
+                        if(mugBleDevice != null) {
+                            if (isMugGattConnected(mugBleDevice) && (mugGatt != null)) {
+                                status = "connected";
+                            }
+                            else status = "not connected";
+                        }
+                        tsLongLast = 0;
+                        MLogger.logToFile(appContext, "service.txt", "TH : Standby - " + status, true);
                         step = processSteps[++psIdx];
                         break;
                     case STEP_QUIT:
@@ -1225,7 +1321,7 @@ public class SyncThread implements Runnable {
 
                         onTheGo = false;
 
-                        if(isMugGattConnected(mugBleDevice)) {
+                        if (isMugGattConnected(mugBleDevice)) {
                             MLogger.logToFile(appContext, "service.txt", String.format("TH : Disconnecting %s...", mugAddress), true);
                             mugGatt.disconnect();
                             mugGatt.close();
@@ -1246,7 +1342,7 @@ public class SyncThread implements Runnable {
 
                         appContext.registerReceiver(mReceiver, filter);
 
-                        if(btAdapter.isDiscovering()) btAdapter.cancelDiscovery();
+                        if (btAdapter.isDiscovering()) btAdapter.cancelDiscovery();
 
                         btAdapter.startDiscovery();
 
@@ -1254,18 +1350,18 @@ public class SyncThread implements Runnable {
 
                         break;
                     case STEP_BT_DISCOVERING:
-                        if(Thread.currentThread().isInterrupted()) {
+                        if (Thread.currentThread().isInterrupted()) {
                             step = processSteps[++psIdx];
                             MLogger.logToFile(appContext, "service.txt", String.format("TH : Terminating discovering"), true);
-                            if(btAdapter.isDiscovering()) btAdapter.cancelDiscovery();
+                            if (btAdapter.isDiscovering()) btAdapter.cancelDiscovery();
                             //while(btAdapter.isDiscovering());
                             //MLogger.logToFile(appContext, "service.txt", String.format("TH : Discovering stopping"), true);
                         }
 
-                        if( requestToBond && !"".equals(macToBond)) {
+                        if (requestToBond && !"".equals(macToBond)) {
                             step = processSteps[++psIdx];
                             MLogger.logToFile(appContext, "service.txt", String.format("TH : Request to bond. Terminating discovering"), true);
-                            if(btAdapter.isDiscovering()) btAdapter.cancelDiscovery();
+                            if (btAdapter.isDiscovering()) btAdapter.cancelDiscovery();
 
 
 //                            while(!isBonded) {};
@@ -1280,11 +1376,11 @@ public class SyncThread implements Runnable {
                         //onTheGo = false;
                         //step = processSteps[++psIdx];
 
-                        if( requestToBond && !"".equals(macToBond)) {
+                        if (requestToBond && !"".equals(macToBond)) {
                             MLogger.logToFile(appContext, "service.txt", String.format("TH : Request to bond %s", macToBond), true);
                             requestToBond = false;
                             step = STEP_BT_WAITING_FOR_BOND;
-                            BluetoothDevice bleDevice =  btAdapter.getRemoteDevice(macToBond);
+                            BluetoothDevice bleDevice = btAdapter.getRemoteDevice(macToBond);
                             bleDevice.createBond();
 
 //                            try {
@@ -1307,7 +1403,6 @@ public class SyncThread implements Runnable {
                         MLogger.logToFile(appContext, "service.txt", String.format("TH : Discovering done - QUIT"), true);
                         onTheGo = false;
 
-
                         break;
                     case STEP_BT_WAITING_FOR_BOND:
 //                        if( requestToBond && !"".equals(macToBond)) {
@@ -1319,7 +1414,9 @@ public class SyncThread implements Runnable {
 //                            onTheGo = false;
 //                        }
 
-                        while(!isBonded) {};
+                        while (!isBonded) {
+                        }
+                        ;
                         MLogger.logToFile(appContext, "service.txt", String.format("TH : Bonded %s", macToBond), true);
                         updateBTDevices("WWWW", macToBond, DISCOVERING_PAIRED);
                         onTheGo = false;
@@ -1327,30 +1424,30 @@ public class SyncThread implements Runnable {
                         break;
                     //-------------------------------------------------------------------------
                     case STEP_PAIRED_INFO:
-                        if(btAdapter == null) {
+                        if (btAdapter == null) {
                             // BT isn't supported
                             MLogger.logToFile(appContext, "service.txt", "TH : Adapter is NULL", true);
                             onTheGo = false;
                             // add error processing
                             break;
-                        } else if(!btAdapter.isEnabled()) {
+                        } else if (!btAdapter.isEnabled()) {
                             MLogger.logToFile(appContext, "service.txt", "TH : Adapter is Disabled", true);
                             onTheGo = false;
                             // add error processing
                             break;
                         }
 
-                        while(mugsListIdx < mugsList.size() ) {
+                        while (semPListIdx < semPList.size()) {
 
-                            mugBleDevice = btAdapter.getRemoteDevice(mugsList.get(mugsListIdx).getMACAddress());
+                            mugBleDevice = btAdapter.getRemoteDevice(semPList.get(semPListIdx).getMACAddress());
 
-                            MLogger.logToFile(  appContext,
-                                                "service.txt",
-                                                String.format( Locale.getDefault(),
-                                                                "TH : collecting data for %s (%d/%d)",
-                                                                mugsList.get(mugsListIdx).getMACAddress(),
-                                                                mugsListIdx,
-                                                                mugsList.size() - 1 ) , true);
+                            MLogger.logToFile(appContext,
+                                    "service.txt",
+                                    String.format(Locale.getDefault(),
+                                            "TH : collecting data for %s (%d/%d)",
+                                            semPList.get(semPListIdx).getMACAddress(),
+                                            semPListIdx,
+                                            semPList.size() - 1), true);
 
                             mugGattConnected = false;
                             mugGattDiscovered = false;
@@ -1360,19 +1457,19 @@ public class SyncThread implements Runnable {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT is null. connectGATT..."), true);
                                 mugGatt = mugBleDevice.connectGatt(appContext, true, bleGattCallback);
 
-                            } catch(Exception e) {
+                            } catch (Exception e) {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT connect exception %s", e.toString()), true);
                             }
 
                             (timeToConnect = new EventsTimer()).start(5000);
 
-                            while(!mugGattConnected && !Thread.currentThread().isInterrupted()) {
+                            while (!mugGattConnected && !Thread.currentThread().isInterrupted()) {
 
-                                if(timeToConnect.isReady()) {
+                                if (timeToConnect.isReady()) {
                                     MLogger.logToFile(appContext, "service.txt",
                                             String.format(Locale.getDefault(), "TH : [ %d ] GATT connection timeout %s",
-                                                                                Thread.currentThread().getId(),
-                                                                                mugsList.get(mugsListIdx).getMACAddress()), true);
+                                                    Thread.currentThread().getId(),
+                                                    semPList.get(semPListIdx).getMACAddress()), true);
                                     updatePairedInfo(false);
 
                                     break;
@@ -1381,14 +1478,14 @@ public class SyncThread implements Runnable {
 
                             timeToConnect = null;
 
-                            if(Thread.currentThread().isInterrupted()) {
+                            if (Thread.currentThread().isInterrupted()) {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : interrupted"), true);
                                 break;
                             }
 
-                            if(!mugGattConnected) {
+                            if (!mugGattConnected) {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : switching to next device"), true);
-                                mugsListIdx++;
+                                semPListIdx++;
                                 continue;
                             }
 
@@ -1396,9 +1493,10 @@ public class SyncThread implements Runnable {
 
                             mugGatt.discoverServices();
 
-                            while(!mugGattDiscovered && !Thread.currentThread().isInterrupted()) { }
+                            while (!mugGattDiscovered && !Thread.currentThread().isInterrupted()) {
+                            }
 
-                            if(!mugGattDiscovered) {
+                            if (!mugGattDiscovered) {
                                 MLogger.logToFile(appContext, "service.txt", String.format("TH : Couldn't discover services, switching to next device"), true);
                             }
 
@@ -1407,54 +1505,48 @@ public class SyncThread implements Runnable {
 
                             //----
 
-                            if( readCharacteristic(ReadQueue.get(0)) ) {
+                            if (readCharacteristic(ReadQueue.get(0))) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Name - OK", true);
-                            }
-                            else {
+                            } else {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Name - ERR", true);
                             }
 
-                            if( readCharacteristic(ReadQueue.get(1)) ) {
+                            if (readCharacteristic(ReadQueue.get(1))) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Tcurrent - OK", true);
-                            }
-                            else {
+                            } else {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Tcurrent - ERR", true);
                             }
 
-                            if( readCharacteristic(ReadQueue.get(2)) ) {
+                            if (readCharacteristic(ReadQueue.get(2))) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Ttarget - OK", true);
-                            }
-                            else {
+                            } else {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Ttarget - ERR", true);
                             }
 
-                            if( readCharacteristic(ReadQueue.get(3)) ) {
+                            if (readCharacteristic(ReadQueue.get(3))) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Battery - OK", true);
-                            }
-                            else {
+                            } else {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Battery - ERR", true);
                             }
 
-                            if( readCharacteristic(ReadQueue.get(6)) ) {
+                            if (readCharacteristic(ReadQueue.get(6))) {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Color - OK", true);
-                            }
-                            else {
+                            } else {
                                 MLogger.logToFile(appContext, "service.txt", "TH : Reading Color - ERR", true);
                             }
-                            mugsList.get(mugsListIdx).setType(MugParameters.TYPE_PAIRED);
+                            semPList.get(semPListIdx).setType(SolarEnergyMeterParameters.TYPE_PAIRED);
                             updatePairedInfo(false);
 
                             //------------------------------------------------
-                            mugsListIdx++;
+                            semPListIdx++;
                         }
                         MLogger.logToFile(appContext, "service.txt", "TH : Paired info - DONE", true);
 
-                        if(Thread.currentThread().isInterrupted()) {
+                        if (Thread.currentThread().isInterrupted()) {
                             MLogger.logToFile(appContext, "service.txt", String.format("TH : paired - interrupted"), true);
                             //updatePairedInfo(true);
                             onTheGo = false;
-                        }
-                        else {
+                        } else {
                             step = processSteps[++psIdx];
                         }
                         break;
@@ -1468,23 +1560,61 @@ public class SyncThread implements Runnable {
     private final BluetoothGattCallback bleGattCallback = new BluetoothGattCallback() {
         @Override
         public void onConnectionStateChange(BluetoothGatt gatt, int status, int newState) {
-            if(newState == BluetoothProfile.STATE_CONNECTED) {
-                mugGattConnected = true;
-                mugsList.get(mugsListIdx).setConnected(true);
+            if (newState == BluetoothProfile.STATE_CONNECTED) {
+
                 MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT Connected %s (%d)", gatt.getDevice().getAddress(), step), true);
+                if (ActivityCompat.checkSelfPermission(appContext, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
+                    // TODO: Consider calling
+                    //    ActivityCompat#requestPermissions
+                    // here to request the missing permissions, and then overriding
+                    //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                    //                                          int[] grantResults)
+                    // to handle the case where the user grants the permission. See the documentation
+                    // for ActivityCompat#requestPermissions for more details.
+                    return;
+                }
+                //gatt.requestMtu(100);
+                //gatt.requestMtu(50);
+
+                mugGattConnected = true;
+                semPList.get(semPListIdx).setConnected(true);
+
                 if(step == STEP_IDLE) {
                     requestToReRead = true;
                     MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT Connected - ReRead %s (%d)", gatt.getDevice().getAddress(), step), true);
                 }
+
             } else if(newState == BluetoothProfile.STATE_DISCONNECTED) {
                 MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT Disconnected %s (%d) ", gatt.getDevice().getAddress(), step), true);
                 mugGattConnected = false;
-                mugsList.get(mugsListIdx).setConnected(false);
+                semPList.get(semPListIdx).setConnected(false);
             } else if(newState == BluetoothProfile.STATE_CONNECTING) {
                 MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT Connecting %s (%d) ", gatt.getDevice().getAddress(), step), true);
             } else if(newState == BluetoothProfile.STATE_DISCONNECTING) {
                 MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT Disconnecting %s (%d)", gatt.getDevice().getAddress(), step), true);
             }
+        }
+
+        @Override
+        public void onMtuChanged(BluetoothGatt gatt, int mtu, int status) {
+            super.onMtuChanged(gatt, mtu, status);
+            if(status == BluetoothGatt.GATT_SUCCESS) {
+                MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT MTU  %s (%d)", gatt.getDevice().getAddress(), mtu), true);
+
+                /*
+                mugGattConnected = true;
+                semPList.get(semPListIdx).setConnected(true);
+
+                if(step == STEP_IDLE) {
+                    requestToReRead = true;
+                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT MTU Changed - ReRead %s (%d)", gatt.getDevice().getAddress(), step), true);
+                }*/
+
+            }
+            else {
+                MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: GATT MTU Error %s (%d)", gatt.getDevice().getAddress(), status), true);
+            }
+            gattMTUUpdated = true;
         }
 
         @Override
@@ -1497,27 +1627,20 @@ public class SyncThread implements Runnable {
                 for(int i = 0; i < list.size(); i++) {
                     s += list.get(i).getUuid().toString().toUpperCase() + "\n";
 
-                    if(UUID.fromString("fc543622-236c-4c94-8fa9-944a3e5353fa").equals(list.get(i).getUuid())) {  // Mug service
+                    if(UUID.fromString("0000fff0-0000-1000-8000-00805f9b34fb").equals(list.get(i).getUuid())) {  // BT986
                         ReadQueue = new ArrayList<>(0x20);
                         s += "yes\n";
                         List<BluetoothGattCharacteristic> charList = list.get(i).getCharacteristics();
                         for(int k = 0; k < charList.size(); k++) {
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540001-236c-4c94-8fa9-944a3e5353fa")))   // 0 Mug name
-                                ReadQueue.add(charList.get(k));
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540002-236c-4c94-8fa9-944a3e5353fa")))   // 1 Current temp
-                                ReadQueue.add(charList.get(k));
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540003-236c-4c94-8fa9-944a3e5353fa")))   // 2 Target temp
-                                ReadQueue.add(charList.get(k));
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540007-236c-4c94-8fa9-944a3e5353fa")))   // 3 battery
-                                ReadQueue.add(charList.get(k));
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540008-236c-4c94-8fa9-944a3e5353fa")))   // 4 Liquid state
+                            if(charList.get(k).getUuid().equals(UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb")))   //  DateTime
                                 ReadQueue.add(charList.get(k));
 
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540012-236c-4c94-8fa9-944a3e5353fa"))) {   // 5 notifications
+                            if(charList.get(k).getUuid().equals(UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb")))   //  Last Record
                                 ReadQueue.add(charList.get(k));
-                            }
-                            if(charList.get(k).getUuid().equals(UUID.fromString("fc540014-236c-4c94-8fa9-944a3e5353fa")))   // 6 color
+
+                            if(charList.get(k).getUuid().equals(UUID.fromString("0000fff4-0000-1000-8000-00805f9b34fb")))   //  Events/Notifications
                                 ReadQueue.add(charList.get(k));
+
 
 
                             List<BluetoothGattDescriptor> descrList = charList.get(k).getDescriptors();
@@ -1559,7 +1682,8 @@ public class SyncThread implements Runnable {
                 mugGattDiscovered = true;
                 //              broadcastUpdate(ACTION_GATT_SERVICES_DISCOVERED);
             } else {
-//                Log.w(TAG, "onServicesDiscovered received: " + status);
+                //Log.w(TAG, "onServicesDiscovered received: " + status);
+                MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : onServicesDiscovered %s", status), true);
             }
         }
 
@@ -1571,30 +1695,101 @@ public class SyncThread implements Runnable {
         ) {
             if(status == BluetoothGatt.GATT_SUCCESS) {
 //                broadcastUpdate(ACTION_DATA_AVAILABLE, characteristic);
+
+                //---- DateTime -------------------------------------------------------------------
+                if(characteristic.getUuid().equals(UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb"))) {  // DateTime
+
+                    //long dateTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, 0);
+                    long dateTime;
+                    byte[] t = characteristic.getValue();
+                    dateTime = t[0] & 0xFF; dateTime <<=8;
+                    dateTime |= t[1] & 0xFF; dateTime <<=8;
+                    dateTime |= t[2] & 0xFF; dateTime <<=8;
+                    dateTime |= t[3] & 0xFF;
+
+                    semPList.get(semPListIdx).setDateTime(dateTime);
+                    String dateString = new SimpleDateFormat("MM/dd/yyyy").format(new Date(dateTime * 1000));
+                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : SoH's DateTime: %08X", dateTime), true);
+                }
+                //---- DateTime -------------------------------------------------------------------
+
+                //---- Last Log Record ------------------------------------------------------------
+                if(characteristic.getUuid().equals(UUID.fromString("0000fff2-0000-1000-8000-00805f9b34fb"))) {
+//                    long timestamp = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, 0);
+//                    long vBatMain = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 4);
+//                    long vBatBkp = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 6);
+//                    long tCPU = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 8);
+                    byte c[] = characteristic.getValue();
+                    //long vBatBkp = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 12);
+                    long vBatBkp = (long)c[18] & 0xFF;
+                    vBatBkp <<= 8;
+                    vBatBkp |= (long)c[19] & 0xFF;
+
+                    long vBat = (long)c[6] & 0xFF;
+                    vBat <<= 8;
+                    vBat |= (long)c[7] & 0xFF;
+                    vBat = vBat;
+
+                    long iBat = (long)c[8];
+                    iBat <<= 8;
+                    iBat |= (long)c[9] & 0xFF;
+
+                    long wBat = (long)c[10];
+                    wBat <<= 8;
+                    wBat |= (long)c[11] & 0xFF;
+
+                    long vLoad = (long)c[12] & 0xFF;
+                    vLoad <<= 8;
+                    vLoad |= (long)c[13] & 0xFF;
+
+                    long iLoad = (long)c[14];
+                    iLoad <<= 8;
+                    iLoad |= (long)c[15] & 0xFF;
+
+                    long eLoad = (long)c[16];
+                    eLoad <<= 8;
+                    eLoad |= (long)c[17] & 0xFF;
+
+
+                    long id = Thread.currentThread().getId();
+
+                    semPList.get(semPListIdx).setCPUBatteryCharge((int)vBatBkp);
+                    semPList.get(semPListIdx).setBatteryVolts((int)vBat);
+                    semPList.get(semPListIdx).setBatteryAmps((int)iBat);
+                    semPList.get(semPListIdx).setBatterymW((int)wBat);
+
+                    semPList.get(semPListIdx).setLoadVolts((int)vLoad);
+                    semPList.get(semPListIdx).setLoadAmps((int)iLoad);
+                    semPList.get(semPListIdx).setLoadmW((int)eLoad);
+
+                    //gatt.readRemoteRssi();
+
+                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d)Bat CPU: %dmV Bat: %dmV %dmA", id, vBatBkp, vBat, iBat), true);
+                }
+                //---- Last Log Record ------------------------------------------------------------
+
                 if(characteristic.getUuid().equals(UUID.fromString("fc540001-236c-4c94-8fa9-944a3e5353fa"))) {
                     String s = characteristic.getStringValue(0);
-                    mugsList.get(mugsListIdx).setMugName(s);
+                    semPList.get(semPListIdx).setMugName(s);
                     MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Mug name: %s", s), true);
                 }
-                if(characteristic.getUuid().equals(UUID.fromString("fc540002-236c-4c94-8fa9-944a3e5353fa"))) {
-                    //    String s = characteristic.getStringValue(0);
-                    int t = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 0);
-                    long id = Thread.currentThread().getId();
-                    mugsList.get(mugsListIdx).setCurrentTemperature((float) t / 100.0f);
-                    //updateWidget(new MugParameters(mugAddress, ((float)t)/100.0f, null, null, true));
-
-                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d)Current temp: %.2fC", id, (float) t / 100.00), true);
-                }
-                if(characteristic.getUuid().equals(UUID.fromString("fc540003-236c-4c94-8fa9-944a3e5353fa"))) {
-                    //    String s = characteristic.getStringValue(0);
-                    int t = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 0);
-                    long id = Thread.currentThread().getId();
-                    mugsList.get(mugsListIdx).setTargetTemperature(t);
-                    //updateWidget(new MugParameters(mugAddress, ((float)t)/100.0f, null, null, true));
-
-                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d)Target temp: %.2fC", id, (float) t / 100.00), true);
-
-                }
+//                if(characteristic.getUuid().equals(UUID.fromString("fc540002-236c-4c94-8fa9-944a3e5353fa"))) {
+//                    //    String s = characteristic.getStringValue(0);
+//                    int t = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+//                    long id = Thread.currentThread().getId();
+//                    semPList.get(semPListIdx).setCurrentTemperature((float) t / 100.0f);
+//
+//                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d)Current temp: %.2fC", id, (float) t / 100.00), true);
+//                }
+//                if(characteristic.getUuid().equals(UUID.fromString("fc540003-236c-4c94-8fa9-944a3e5353fa"))) {
+//                    //    String s = characteristic.getStringValue(0);
+//                    int t = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+//                    long id = Thread.currentThread().getId();
+//                    semPList.get(semPListIdx).setTargetTemperature(t);
+//
+//                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d)Target temp: %.2fC", id, (float) t / 100.00), true);
+//
+//                }
                 if(characteristic.getUuid().equals(UUID.fromString("fc540007-236c-4c94-8fa9-944a3e5353fa"))) {
                     //    String s = characteristic.getStringValue(0);
                     String charging = "no";
@@ -1604,8 +1799,7 @@ public class SyncThread implements Runnable {
                     int v = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 4);
                     if(c == 1) charging = "yes";
 
-                    //updateWidget( new MugParameters( mugAddress, null, null, p, true ) );
-                    mugsList.get(mugsListIdx).setBatteryCharge(p);
+                    semPList.get(semPListIdx).setCPUBatteryCharge(p);
 
                     MLogger.logToFile(appContext, "service.txt",
                             String.format(Locale.getDefault(), "TH : Battery: %d%% charging: %s %.2fC %d", p, charging, (float) t / 100.00, v),
@@ -1639,7 +1833,7 @@ public class SyncThread implements Runnable {
 
                     MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d) Mug color: %06X", id, l ), true);
 
-                    mugsList.get(mugsListIdx).setMugColor(l);
+                    semPList.get(semPListIdx).setMugColor(l);
 
 
 
@@ -1657,17 +1851,22 @@ public class SyncThread implements Runnable {
 
 
             if(characteristic.getUuid().equals(UUID.fromString("fc540001-236c-4c94-8fa9-944a3e5353fa"))) {
-                mugNameSet = true;
+                //mugNameSet = true;
                 mugGattCharWritten = true;
             }
 
             if(characteristic.getUuid().equals(UUID.fromString("fc540003-236c-4c94-8fa9-944a3e5353fa"))) {
                 //if(characteristic.getUuid().equals(UUID.fromString("fc540001-236c-4c94-8fa9-944a3e5353fa"))) {
-                mugTargetTempSet = true;
+                //mugTargetTempSet = true;
                 mugGattCharWritten = true;
             }
+
             if(characteristic.getUuid().equals(UUID.fromString("fc540014-236c-4c94-8fa9-944a3e5353fa"))) {
-                mugColorSet = true;
+                //mugColorSet = true;
+                mugGattCharWritten = true;
+            }
+
+            if(characteristic.getUuid().equals(UUID.fromString("0000fff1-0000-1000-8000-00805f9b34fb"))) {
                 mugGattCharWritten = true;
             }
 
@@ -1680,28 +1879,28 @@ public class SyncThread implements Runnable {
         ) {
 
             byte[] data = characteristic.getValue();
-            String[] info = new String[]{"NA", "Battery", "Charging", "Not charging", "Target temp", "Current temp", "NA", "Level", "State"};
+            //String[] info = new String[]{"NA", "Battery", "Charging", "Not charging", "Target temp", "Current temp", "NA", "Level", "State"};
 
             long id = Thread.currentThread().getId();
-            MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: [%d][%d]Notification %s(%02X) G:%s T:%s", id, step, info[data[0]], data[0], gatt.getDevice().getAddress(), mugAddress), true);
+            MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: [%d][%d]Notification %02X %02X G:%s T:%s", id, step, data[0], data[1], gatt.getDevice().getAddress(), mugAddress), true);
 
             if(needsToSync == false) {
                 switch(data[0]) {
                     case 0x01:
-                        whatToSync |= WTS_BATTERY;
-                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Battery notification"), true);
+                        whatToSync |= WTS_LAST_LOG_REC;
+                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Last log record notification"), true);
                         break;
-                    case 0x04:
-                        // whatToSync |= WTS_TARGET_TEMP;
-                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Target temperature notification"), true);
-                        break;
-                    case 0x05:
-                        whatToSync |= WTS_CURRENT_TEMP;
-                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Current temperature notification"), true);
-                        break;
-                    case 0x08:
-                        //whatToSync |= WTS_LIQUID_STATE;
-                        break;
+//                    case 0x04:
+//                        // whatToSync |= WTS_TARGET_TEMP;
+//                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Target temperature notification"), true);
+//                        break;
+//                    case 0x05:
+//                        whatToSync |= WTS_CURRENT_TEMP;
+//                        MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Current temperature notification"), true);
+//                        break;
+//                    case 0x08:
+//                        //whatToSync |= WTS_LIQUID_STATE;
+//                        break;
 
                 }
                 if(whatToSync != 0) needsToSync = true;
@@ -1721,6 +1920,17 @@ public class SyncThread implements Runnable {
             mugGattDescriptorWritten = true;
 
         }
+
+        @Override
+        public void onReadRemoteRssi(BluetoothGatt gatt, int rssi, int status){
+            if (status == BluetoothGatt.GATT_SUCCESS) {
+         //       Log.d(TAG, String.format("BluetoothGatt ReadRssi[%d]", rssi));
+                MLogger.logToFile(appContext, "service.txt", String.format("BLE: RSSI %d", rssi), true);
+                semPList.get(semPListIdx).setRSSI(rssi);
+                gattRSSIReady = true;
+            }
+        }
+
     };
 
     private final BroadcastReceiver mReceiver = new BroadcastReceiver() {
@@ -1738,7 +1948,7 @@ public class SyncThread implements Runnable {
                         // The user bluetooth is turning off yet, but it is not disabled yet.
                         MLogger.logToFile(appContext, "service.txt", "BLE: Adapter is turning OFF", true);
                         btIsEnabled = false;
-                        mugsList.get(mugsListIdx).setConnected(false);
+                        semPList.get(semPListIdx).setConnected(false);
                         return;
                     case BluetoothAdapter.STATE_ON:
                         if(btAdapter != null) {
@@ -1940,12 +2150,34 @@ public class SyncThread implements Runnable {
             remoteViews.setTextViewText(R.id.tv_widgetId, String.format("[%d]", widgetId));
             remoteViews.setTextViewText(R.id.tv_timeStamp, String.format("#%d %s", id, ts));
 
-            if(mugsList.get(mugsListIdx).getConnected()) {
-                if(mugsList.get(mugsListIdx).getCurrentTemperature() != null)
-                    remoteViews.setTextViewText(R.id.tv_currentTemperature, String.format(Locale.getDefault(), "%.02fC", mugsList.get(mugsListIdx).getCurrentTemperature()));
-                //remoteViews.setTextViewText(R.id.tv_currentTemperature, String.format(Locale.getDefault(), "%.00fC", mugParameters.getCurrentTemperature() ));
-                if(mugsList.get(mugsListIdx).getBatteryCharge() != null)
-                    remoteViews.setTextViewText(R.id.tv_battery, String.format("%d%%", mugsList.get(mugsListIdx).getBatteryCharge()));
+            if(semPList.get(semPListIdx).getConnected()) {
+                if(semPList.get(semPListIdx).getBatteryVolts() != null)
+                    //remoteViews.setTextViewText(R.id.tv_vbat, String.format(Locale.getDefault(), "%.02fC", (float)semPList.get(semPListIdx).getBatteryVolts() * 1.25/1000.0 ) );
+                    remoteViews.setTextViewText(R.id.tv_vbat, String.format(Locale.getDefault(), "%dmV", semPList.get(semPListIdx).getBatteryVolts() ) );
+                if(semPList.get(semPListIdx).getBatteryAmps() != null)
+                    remoteViews.setTextViewText(R.id.tv_ibat, String.format(Locale.getDefault(), "%.02fmA", (float)semPList.get(semPListIdx).getBatteryAmps()/100.0));
+                if(semPList.get(semPListIdx).getBatterymW() != null)
+                    remoteViews.setTextViewText(R.id.tv_wbat, String.format(Locale.getDefault(), "%.02fmAh", (float)semPList.get(semPListIdx).getBatterymW()/100.0));
+
+                if(semPList.get(semPListIdx).getLoadVolts() != null)
+                    remoteViews.setTextViewText(R.id.tv_vload, String.format(Locale.getDefault(), "%dmV", semPList.get(semPListIdx).getLoadVolts() ) );
+                if(semPList.get(semPListIdx).getLoadAmps() != null)
+                    remoteViews.setTextViewText(R.id.tv_iload, String.format(Locale.getDefault(), "%.02fmA", (float)semPList.get(semPListIdx).getLoadAmps()/100.0));
+                if(semPList.get(semPListIdx).getLoadmW() != null)
+                    remoteViews.setTextViewText(R.id.tv_wload, String.format(Locale.getDefault(), "%.02fmAh", (float)semPList.get(semPListIdx).getLoadmW()/100.0));
+
+
+                if(semPList.get(semPListIdx).getCPUBatteryCharge() != null)
+                    remoteViews.setTextViewText(R.id.tv_battery, String.format("%dmV", semPList.get(semPListIdx).getCPUBatteryCharge()));
+                if(semPList.get(semPListIdx).getDateTime() != null) {
+                    String dateString = new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(semPList.get(semPListIdx).getDateTime() * 1000));
+                    remoteViews.setTextViewText(R.id.tv_timeStamp, dateString);
+                }
+                if(semPList.get(semPListIdx).getRSSI() != null) {
+                    String s = String.format("%ddB", semPList.get(semPListIdx).getRSSI());
+                    remoteViews.setTextViewText(R.id.tv_rssi, s);
+                }
+
             } else {
                 remoteViews.setTextViewText(R.id.tv_currentTemperature, "--C");
                 remoteViews.setTextViewText(R.id.tv_battery, "--%");
@@ -1958,7 +2190,7 @@ public class SyncThread implements Runnable {
         if(msgClient != null) {
             try {
                 msgClient.send(Message.obtain(null,
-                        SyncService.MSG_REFRESH_PARAMETERS, 0, 0, mugsList.get(mugsListIdx)));
+                        SyncService.MSG_REFRESH_PARAMETERS, 0, 0, semPList.get(semPListIdx)));
                 MLogger.logToFile(appContext, "service.txt", "TH : Widget update. Msg to activity - Value sent", true);
             } catch(RemoteException e) {
                 MLogger.logToFile(appContext, "service.txt", "TH : Widget update. Remote exception " + e.toString(), true);
@@ -2004,14 +2236,14 @@ public class SyncThread implements Runnable {
                         MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Device discovered %s. Msg to activity.", mac), true);
                         msgClient.send(Message.obtain(null,
                                 SyncService.MSG_NOT_PAIRED_DEVICE_INFO, 0, 0,
-                                new MugParameters(mac, name, null, null, null, null, null, MugParameters.TYPE_DISCOVERED, false)
+                                new SolarEnergyMeterParameters(mac, name, null, null, null, null, null, null, null, null, null, SolarEnergyMeterParameters.TYPE_DISCOVERED, false, null, null)
                         ));
                     break;
                     case DISCOVERING_PAIRED:
                         MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : Paired. Msg to activity.", mac), true);
                         msgClient.send(Message.obtain(null,
                                 SyncService.MSG_NEW_PAIRED_DEVICE_INFO, 0, 0,
-                                new MugParameters(mac, name, null, null, null, null, null, MugParameters.TYPE_PAIRED, false)));
+                                new SolarEnergyMeterParameters(mac, name, null, null, null, null, null, null, null, null, null, SolarEnergyMeterParameters.TYPE_PAIRED, false, null, null)));
                         break;
                 }
             } catch(RemoteException e) {
@@ -2031,7 +2263,7 @@ public class SyncThread implements Runnable {
 
     void updatePairedInfo(boolean done) {
 
-        MLogger.logToFile(appContext, "service.txt", String.format("TH : update %d", mugsListIdx), true);
+        MLogger.logToFile(appContext, "service.txt", String.format("TH : update %d", semPListIdx), true);
 
         if(msgClient != null) {
 
@@ -2042,7 +2274,7 @@ public class SyncThread implements Runnable {
                 }
                 else {
                     msgClient.send(Message.obtain(null,
-                            SyncService.MSG_PAIRED_DEVICE_INFO, 0, 0, mugsList.get(mugsListIdx)));
+                            SyncService.MSG_PAIRED_DEVICE_INFO, 0, 0, semPList.get(semPListIdx)));
                 }
                 MLogger.logToFile(appContext, "service.txt", "TH : Paired info. Msg to activity - Value sent", true);
             } catch(RemoteException e) {
@@ -2083,9 +2315,9 @@ public class SyncThread implements Runnable {
 
         List<BluetoothDevice> connectedBLEDevices = ((BluetoothManager) appContext.getSystemService(Context.BLUETOOTH_SERVICE)).getConnectedDevices(BluetoothProfile.GATT);
 
-        for(BluetoothDevice d : connectedBLEDevices) {
-            MLogger.logToFile(appContext, "service.txt", "TH : Connected: " + d.getAddress(), true);
-        }
+//        for(BluetoothDevice d : connectedBLEDevices) {
+//            MLogger.logToFile(appContext, "service.txt", "TH : Connected: " + d.getAddress(), true);
+//        }
 
         if(connectedBLEDevices.contains(mugBleDevice) == false) return false;
 

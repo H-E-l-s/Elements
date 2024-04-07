@@ -130,7 +130,7 @@ public class SyncService extends Service {
                                         if(mugIsEnabled) {
                                             String threadName = String.format("*%s_%s", getPackageName(), mac);
                                             if(!isThreadRunning(getApplicationContext(), threadName)) {
-                                                SyncThread st = new SyncThread(getApplicationContext(), mac, widgetIDs[i], SyncThread.TASK_MUG_THREAD);
+                                                SyncThread st = new SyncThread(getApplicationContext(), mac, widgetIDs[i], SyncThread.TASK_ELEMENT_THREAD);
                                                 Thread th = new Thread(st, threadName);
                                                 MLogger.logToFile(getApplicationContext(), "service.txt", "SRV: onStart: Thread REstOring:" + threadName, true);
 
@@ -160,7 +160,7 @@ public class SyncService extends Service {
                             String threadName = String.format("*%s_%s", getPackageName(), mac);
                             if(!isThreadRunning(getApplicationContext(), threadName)) {
                                 MLogger.logToFile(getApplicationContext(), "service.txt", "SRV: onStart: Thread starting " + mac, true);
-                                SyncThread st = new SyncThread(getApplicationContext(), mac, widgetID, SyncThread.TASK_MUG_THREAD);
+                                SyncThread st = new SyncThread(getApplicationContext(), mac, widgetID, SyncThread.TASK_ELEMENT_THREAD);
                                 Thread th = new Thread(st, threadName);
 
                               // threads.add(new ThreadInfo(st, th, mac, widgetID));
@@ -178,9 +178,9 @@ public class SyncService extends Service {
                         String threadName = String.format("*%s_paired", getPackageName());
 
                         //String[] macList = intent.getStringArrayExtra("mac_list");
-                        ArrayList<MugParameters> mugsList = intent.getExtras().getParcelableArrayList("mugs_list");
+                        ArrayList<SolarEnergyMeterParameters> semPList = intent.getExtras().getParcelableArrayList("mugs_list");
 
-                        SyncThread st = new SyncThread(getApplicationContext(), mugsList, SyncThread.TASK_GET_PAIRED_INFO);
+                        SyncThread st = new SyncThread(getApplicationContext(), semPList, SyncThread.TASK_GET_PAIRED_INFO);
 
                         Thread th = new Thread(st, threadName);
 
@@ -394,10 +394,10 @@ public class SyncService extends Service {
                     break;
                 case MSG_SET_PARAMETERS:
                     if(msg.obj != null) {
-                        MugParameters mp = (MugParameters)msg.obj;
-                        MLogger.logToFile(getApplicationContext(), "service.txt", String.format("SRV: Request to set parameters %s", mp.getMACAddress()), true);
-                        ThreadInfo ti = getThreadInfo(mp.getMACAddress());
-                        ti.st.setRequestToSetParameters(mp);
+                        SolarEnergyMeterParameters semP = (SolarEnergyMeterParameters) msg.obj;
+                        MLogger.logToFile(getApplicationContext(), "service.txt", String.format("SRV: Request to set parameters %s", semP.getMACAddress()), true);
+                        ThreadInfo ti = getThreadInfo(semP.getMACAddress());
+                        ti.st.setRequestToSetParameters(semP);
                     }
                     break;
                 case MSG_ENABLE_DISABLE:

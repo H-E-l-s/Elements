@@ -31,7 +31,9 @@ import androidx.annotation.Nullable;
 
 import com.google.android.material.switchmaterial.SwitchMaterial;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.Locale;
 
 public class MugFragment extends Fragment {
@@ -57,7 +59,7 @@ public class MugFragment extends Fragment {
     Context context = null;
     String mac;
 
-    TextView tv_devName, tv_devMAC, tv_mugName, tv_tCurrent, tv_tTarget, tv_battery, tv_mugColor;
+    TextView tv_devName, tv_devMAC, tv_mugName, tv_tCurrent, tv_tTarget, tv_battery, tv_mugColor, tv_dateTime;
     ListView lv_settings;
     Button btn_setParameters;
     ImageView iv;
@@ -112,6 +114,7 @@ public class MugFragment extends Fragment {
         tv_battery = view.findViewById(R.id.tv_battery);
         tv_devMAC = view.findViewById(R.id.tv_devMac);
         tv_mugColor = view.findViewById(R.id.tv_mug_color);
+        tv_dateTime = view.findViewById(R.id.tv_date_time);
 
         iv = (ImageView) view.findViewById(R.id.iv_mug_color_current);
 
@@ -121,23 +124,27 @@ public class MugFragment extends Fragment {
         btn_setParameters.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
                 String s = "MUG: Set: ";
-                String name = null;
-                Integer targetTemperature = null;
-                Long color = null;
+                //String name = null;
+                //Integer targetTemperature = null;
+                //Long color = null;
 
-                name  = mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_NAME)).getMugName();
-                targetTemperature  = mugSettings.get(findMugSetting(MugSettings.TYPE_TEMP_TARGET)).getTargetTemperature();
-                color  = mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_COLOR)).getMugColor();
+                //name  = mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_NAME)).getMugName();
+                //targetTemperature  = mugSettings.get(findMugSetting(MugSettings.TYPE_TEMP_TARGET)).getTargetTemperature();
+                //color  = mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_COLOR)).getMugColor();
 
-                s += ( (name == null) ? "name: NA" : "name: NA" + name );
-                s += ((targetTemperature == null) ? (" Ttrgt: NA") : String.format(Locale.getDefault(), " Ttrgt: %d \u2103", targetTemperature / 100) ) ;
-                s += String.format(Locale.getDefault(), " Color: %08X", color );
+                long dateTime= System.currentTimeMillis()/1000;
+                //String dateString = new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
+
+                //s += ( (name == null) ? "name: NA" : "name: NA" + name );
+                //s += ((targetTemperature == null) ? (" Ttrgt: NA") : String.format(Locale.getDefault(), " Ttrgt: %d \u2103", targetTemperature / 100) ) ;
+                //s += String.format(Locale.getDefault(), " Color: %08X", color );
+                s += new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
 
                 setViewAndChildrenEnabled(layoutView, false);
                 pb_BusyMug.setVisibility(View.VISIBLE);
 
                 MLogger.logToFile(context, "service.txt", s, true);
-                requestToSetParameters(new MugParameters(mac, null, name, color, null, targetTemperature, null, null, null));
+                requestToSetParameters(new SolarEnergyMeterParameters(mac, null, null, null, null, null, null, null, null, null, null, null, null, dateTime, null));
 
                 clearInfo();
 
@@ -386,24 +393,24 @@ public class MugFragment extends Fragment {
                 case SyncService.MSG_REFRESH_PARAMETERS:
                     MLogger.logToFile(getActivity(), "service.txt", "MUG: Fragment: parameters updating", true);
                     if(msg.obj != null) {
-                        MugParameters mp = (MugParameters)msg.obj;
-                        Float ct = mp.getCurrentTemperature();
+                        SolarEnergyMeterParameters mp = (SolarEnergyMeterParameters) msg.obj;
+                        Integer bv = mp.getBatteryVolts();
 
-                        if(ct != null) {
-                            MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: current temp: %.02fC",ct), true);
+                        if(bv != null) {
+                            MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: battery Volts: %d mV",bv), true);
                             //tv_tCurrent.setText(String.format(Locale.getDefault(), "Current temperature: %.02fC", ct));
-                            tv_tCurrent.setText(String.format(Locale.getDefault(), tCurrentC, ct.intValue()));
+                            tv_tCurrent.setText(String.format(Locale.getDefault(), tCurrentC, bv ));
                         }
                         else {
                             tv_tCurrent.setText(String.format(Locale.getDefault(), tCurrentEmpty));
                         }
 
-                        Integer tt = mp.getTargetTemperature();
-                        if(tt != null) {
-                            MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: target temp: %.02fC",tt.floatValue()/100.0f), true);
+                        Integer ba = mp.getBatteryAmps();
+                        if(ba != null) {
+                            MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: battery Amps: %d mA", ba), true);
                             //tv_tCurrent.setText(String.format(Locale.getDefault(), "Current temperature: %.02fC", ct));
                             //tv_tTarget.setText(String.format(Locale.getDefault(), "Target temperature: %d C", tt/100));
-                            tv_tTarget.setText(String.format(Locale.getDefault(), tTargetC, tt/100));
+                            tv_tTarget.setText(String.format(Locale.getDefault(), tTargetC, ba));
 
                             //mugSettings.get(findMugSetting(MugSettings.TYPE_TEMP_TARGET)).setTargetTemperature(tt);
                             //updateListView = true;
@@ -413,7 +420,7 @@ public class MugFragment extends Fragment {
                             //mugSettings.get(findMugSetting(MugSettings.TYPE_TEMP_TARGET)).setTargetTemperature(null);
                         }
 
-                        Integer charge = mp.getBatteryCharge();
+                        Integer charge = mp.getCPUBatteryCharge();
                         if(charge != null) {
                             MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: battery: %d%%",charge), true);
                             tv_battery.setText(String.format(Locale.getDefault(), batteryPercent, charge));
@@ -431,6 +438,17 @@ public class MugFragment extends Fragment {
                             tv_mugName.setText("---");
                             //mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_NAME)).setMugName("---");
                         }
+
+                        Long dateTime = mp.getDateTime();
+                        if( dateTime != null) {
+                            String dateString = new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
+                            tv_dateTime.setText( String.format("%s %08X", dateString, dateTime));
+                        }
+                        else {
+                            tv_dateTime.setText("-- -- --");
+                            //mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_NAME)).setMugName("---");
+                        }
+
 
                         tv_devMAC.setText( "MAC: " + mp.getMACAddress());
 
@@ -497,12 +515,12 @@ public class MugFragment extends Fragment {
         }
     }
 
-    void requestToSetParameters(MugParameters mugParameters) {
+    void requestToSetParameters(SolarEnergyMeterParameters semParameters) {
         MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: Request to set parameters %s", mac), true);
         Message msg = Message.obtain(null,
                 SyncService.MSG_SET_PARAMETERS);
         msg.replyTo = mMessenger;
-        msg.obj = mugParameters;
+        msg.obj = semParameters;
         try {
             syncServiceMessenger.send(msg);
         } catch(RemoteException e) {

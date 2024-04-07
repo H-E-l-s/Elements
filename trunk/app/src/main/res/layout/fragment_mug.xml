@@ -125,9 +125,24 @@
             </ImageView>
         </LinearLayout>
         <TextView
-            android:id="@+id/tv_devMac"
+            android:id="@+id/tv_date_time"
             android:layout_alignParentLeft="true"
             android:layout_below="@+id/ll_mug_color"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:textSize="14dp"
+            android:text=""
+            android:typeface="monospace"
+            android:textStyle="normal"
+            android:layout_marginLeft="20dp"
+            android:layout_marginRight="3dp"
+            android:layout_marginTop="3dp"
+            android:layout_marginBottom="3dp"
+            android:textColor="@color/white" />
+        <TextView
+            android:id="@+id/tv_devMac"
+            android:layout_alignParentLeft="true"
+            android:layout_below="@+id/tv_date_time"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:textSize="14dp"

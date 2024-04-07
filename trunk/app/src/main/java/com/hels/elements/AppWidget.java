@@ -48,6 +48,7 @@ public class AppWidget extends AppWidgetProvider {
         appWidgetManager.updateAppWidget(appWidgetId, views);
         //-----------------------------------------------------------------------------------------
         //---- Intent: open Mug Widget setting fragment by clicking on Mug image ------------------
+        /* obsolete
         Intent showWidgetConfigIntent = new Intent(context, MainActivity.class);
         showWidgetConfigIntent.setData(Uri.withAppendedPath(Uri.parse("abc" + "://widget/id/"), String.valueOf(appWidgetId)));
         showWidgetConfigIntent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, appWidgetId);  // Identifies the particular widget...
@@ -56,6 +57,8 @@ public class AppWidget extends AppWidgetProvider {
         PendingIntent showWidgetConfigPendingIntent = PendingIntent.getActivity(context, 0, showWidgetConfigIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         //views.setOnClickPendingIntent(R.id.widget_layout, pendingIntent);;
         views.setOnClickPendingIntent(R.id.iv_mug, showWidgetConfigPendingIntent);;
+        end of obsolete */
+
         //-----------------------------------------------------------------------------------------
 
         String mac =AppPreferences.readString(context,  String.format(Locale.getDefault(), "widget_%d", appWidgetId), "mac");
