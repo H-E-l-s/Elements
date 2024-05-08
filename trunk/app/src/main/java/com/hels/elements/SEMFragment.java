@@ -36,7 +36,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
-public class MugFragment extends Fragment {
+public class SEMFragment extends Fragment {
 
     final String tTargetEmpty = "Target temperature: ---";
     final String tTargetC = "Target temperature: %d \u2103";
@@ -65,8 +65,8 @@ public class MugFragment extends Fragment {
     ImageView iv;
     ProgressBar pb_BusyMug;
 
-    MugSettingsListAdapter settingsListAdapter;
-    ArrayList<MugSettings> mugSettings;
+    SEMSettingsListAdapter settingsListAdapter;
+    ArrayList<SEMSettings> semSettings;
 
     int widgetID = 0;
 
@@ -83,13 +83,13 @@ public class MugFragment extends Fragment {
         View contentView = inflater.inflate(R.layout.fragment_mug, container, false);
         //ListView lv_settings = contentView.findViewById(R.id.lv_mug_settings);
 
-        mugSettings  = new ArrayList<>();
-        mugSettings.add(new MugSettings( (Integer)null, MugSettings.TYPE_TEMP_TARGET));
-        mugSettings.add(new MugSettings( (String)null, MugSettings.TYPE_MUG_NAME));
-        mugSettings.add(new MugSettings( (Long)null, MugSettings.TYPE_MUG_COLOR));
+        semSettings = new ArrayList<>();
+        semSettings.add(new SEMSettings( (Integer)null, (Integer)null, (Integer)null, SEMSettings.TYPE_LOAD));
+        //semSettings.add(new MugSettings( (String)null, MugSettings.TYPE_MUG_NAME));
+        //semSettings.add(new MugSettings( (Long)null, MugSettings.TYPE_MUG_COLOR));
         //mugSettings.add(new MugSettings("Mug color: ", MugSettings.TYPE_MUG_COLOR));
 
-        settingsListAdapter = new MugSettingsListAdapter(context, mugSettings);
+        settingsListAdapter = new SEMSettingsListAdapter(context, semSettings);
         lv_settings = (ListView) contentView.findViewById(R.id.lv_mug_settings);
         lv_settings.setAdapter(settingsListAdapter);
         layoutView = contentView;
@@ -123,7 +123,7 @@ public class MugFragment extends Fragment {
         btn_setParameters = view.findViewById(R.id.btn_setParameters);
         btn_setParameters.setOnClickListener(new View.OnClickListener() {
             public void onClick(View v) {
-                String s = "MUG: Set: ";
+                String s = "SEM: Set: ";
                 //String name = null;
                 //Integer targetTemperature = null;
                 //Long color = null;
@@ -132,6 +132,10 @@ public class MugFragment extends Fragment {
                 //targetTemperature  = mugSettings.get(findMugSetting(MugSettings.TYPE_TEMP_TARGET)).getTargetTemperature();
                 //color  = mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_COLOR)).getMugColor();
 
+                Integer loadOnTime = semSettings.get(findSetting(SEMSettings.TYPE_LOAD)).getLoadOnTime();
+                Integer loadOnPeriod = semSettings.get(findSetting(SEMSettings.TYPE_LOAD)).getLoadPeriod();
+                Integer loadCurent = semSettings.get(findSetting(SEMSettings.TYPE_LOAD)).getLoadCurrent();
+
                 long dateTime= System.currentTimeMillis()/1000;
                 //String dateString = new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
 
@@ -139,12 +143,15 @@ public class MugFragment extends Fragment {
                 //s += ((targetTemperature == null) ? (" Ttrgt: NA") : String.format(Locale.getDefault(), " Ttrgt: %d \u2103", targetTemperature / 100) ) ;
                 //s += String.format(Locale.getDefault(), " Color: %08X", color );
                 s += new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
+                if((loadOnTime != null) && (loadOnPeriod != null) && (loadCurent != null))
+                    s += String.format("On Time: %dms On Period: %dms On Current: %dma", loadOnTime, loadOnPeriod, loadCurent);
+                else s += " Something is NULL";
 
                 setViewAndChildrenEnabled(layoutView, false);
                 pb_BusyMug.setVisibility(View.VISIBLE);
 
-                MLogger.logToFile(context, "service.txt", s, true);
-                requestToSetParameters(new SolarEnergyMeterParameters(mac, null, null, null, null, null, null, null, null, null, null, null, null, dateTime, null));
+                MLogger.logToFile(null, "", s, true);
+                requestToSetParameters(new SolarEnergyMeterParameters(mac, null, null, null, null, null, null, null, null, loadOnTime, loadOnPeriod, loadCurent, null, null, null, null, dateTime, null));
 
                 clearInfo();
 
@@ -452,41 +459,22 @@ public class MugFragment extends Fragment {
 
                         tv_devMAC.setText( "MAC: " + mp.getMACAddress());
 
-                        Long color = mp.getMugColor();
-                        if(color != null) {
-                            MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: color: %06X", color), true);
-                            tv_mugColor.setText(String.format(Locale.getDefault(), mugColorHex, color));
-                            //mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_COLOR)).setMugColor(color);
+//                        Long color = mp.getMugColor();
+//                        if(color != null) {
+//                            MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: color: %06X", color), true);
+//                            tv_mugColor.setText(String.format(Locale.getDefault(), mugColorHex, color));
+//                            GradientDrawable shape = new GradientDrawable();
+//                            shape.setShape(GradientDrawable.OVAL);
+//                            String s = String.format("#%06X", (color & 0x00FFFFFF));
+//                            shape.setColor(Color.parseColor(s));
+//                            shape.setStroke(5, Color.rgb(255,255,255));
+//                            iv.setBackground(shape);
+//                            iv.setAlpha(1.0f);
+//                        }
+//                        else {
+//                            tv_mugColor.setText(String.format(Locale.getDefault(), mugColorEmpty));
+//                        }
 
-                            //Paint mugColorPaint;
-                            GradientDrawable shape = new GradientDrawable();
-                            shape.setShape(GradientDrawable.OVAL);
-                            //shape.setCornerRadii(new float[]{0,0,0,0,0,0,0,0,});
-
-                            //String s = String.format("#FF%06X", (color & 0x00FFFFFF));
-                            String s = String.format("#%06X", (color & 0x00FFFFFF));
-                            shape.setColor(Color.parseColor(s));
-                            //int c = Color.parseColor("red");
-                            //c &= 0x00FFFFFF;
-                            //shape.setColor(c);
-
-                            //shape.setColor(Color.rgb(0x50,0x50,0x00));
-                            //shape.setColor(Color.rgb(255,00,00));
-                            shape.setStroke(5, Color.rgb(255,255,255));
-
-
-
-                            iv.setBackground(shape);
-                            iv.setAlpha(1.0f);
-                            //updateListView = true;
-
-                        }
-                        else {
-                            tv_mugColor.setText(String.format(Locale.getDefault(), mugColorEmpty));
-                            //mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_COLOR)).setMugColor(null);
-                        }
-
-                        //if(updateListView) settingsListAdapter.notifyDataSetChanged();
 
                     }
                     break;
@@ -538,9 +526,9 @@ public class MugFragment extends Fragment {
 
         iv.setAlpha(0.0f);
 
-        mugSettings.get(findMugSetting(MugSettings.TYPE_TEMP_TARGET)).setTargetTemperature(null);
-        mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_NAME)).setMugName(null);
-        mugSettings.get(findMugSetting(MugSettings.TYPE_MUG_COLOR)).setMugColor(null);
+        semSettings.get(findSetting(SEMSettings.TYPE_LOAD)).setLoadOnTime(null);
+        semSettings.get(findSetting(SEMSettings.TYPE_LOAD)).setLoadPeriod(null);
+        semSettings.get(findSetting(SEMSettings.TYPE_LOAD)).setLoadCurrent(null);
         settingsListAdapter.notifyDataSetChanged();
     }
 
@@ -579,9 +567,9 @@ public class MugFragment extends Fragment {
         }
     }
 
-    Integer findMugSetting(Integer type) {
-        for(int i = 0; i < mugSettings.size(); i++) {
-            if(mugSettings.get(i).getType() == type) return i;
+    Integer findSetting(Integer type) {
+        for(int i = 0; i < semSettings.size(); i++) {
+            if(semSettings.get(i).getType() == type) return i;
         }
 
         return null;

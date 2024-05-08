@@ -27,11 +27,11 @@
         android:id="@+id/tv_currentTemperature"
 
         android:layout_alignParentRight="true"
-        android:layout_alignParentTop="true"
+        android:layout_alignParentBottom="true"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="25.00C"
-        android:textSize="26sp"
+        android:text="--.--\u2103"
+        android:textSize="20dp"
         android:typeface="monospace"
         android:textStyle="normal"
         android:textColor="@color/white"
@@ -42,13 +42,12 @@
 
     <TextView
         android:id="@+id/tv_battery"
-
+        android:layout_above="@id/tv_currentTemperature"
         android:layout_alignParentRight="true"
-        android:layout_below="@+id/tv_currentTemperature"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="99%"
-        android:textSize="20sp"
+        android:text="--.--mV"
+        android:textSize="20dp"
         android:typeface="monospace"
         android:textStyle="normal"
         android:textColor="@color/white"

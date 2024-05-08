@@ -230,7 +230,7 @@ public class AppWidgetConfigureActivity extends Activity {
             for(BluetoothDevice d : pairedDevices) {
                 if( (d.getName() != null) && d.getName().length() >="Ember".length())
                     if("Ember".equals(d.getName().substring(0,"Ember".length())))
-                        semParametersToCheck.add( new SolarEnergyMeterParameters( d.getAddress(), d.getName(), null, null, null, null, null, null, null, null, null, SolarEnergyMeterParameters.TYPE_PAIRED, false, null, null) );
+                        semParametersToCheck.add( new SolarEnergyMeterParameters( d.getAddress(), d.getName(), null, null, null, null, null, null, null, null, null, null, null, null, SolarEnergyMeterParameters.TYPE_PAIRED, false, null, null) );
             }
         }
 

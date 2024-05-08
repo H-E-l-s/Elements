@@ -237,7 +237,7 @@ public class MainActivity extends AppCompatActivity {
                 Log.d("ACTIVITY", "Action :" + action);
                 if("mug".equals(action)) {
                     Log.d("ACTIVITY", "Mug fragment");
-                    showFragment(new MugFragment(), widgetId);
+                    showFragment(new SEMFragment(), widgetId);
                 }
                 else {
                     Log.d("ACTIVITY", "Widget fragment");
