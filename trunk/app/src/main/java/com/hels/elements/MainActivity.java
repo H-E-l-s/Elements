@@ -75,7 +75,7 @@ public class MainActivity extends AppCompatActivity {
         View v = findViewById(android.R.id.content).getRootView();
         logger = new MLogger(getApplicationContext(), v, "log.txt");
 
-        checkPermissions();
+        Bluetooth.checkPermissions(this);
 
     //    if (!Settings.canDrawOverlays(getApplicationContext())) { startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION)); }
 
@@ -317,7 +317,7 @@ public class MainActivity extends AppCompatActivity {
         //return false;
     }
 
-
+/*
     private boolean checkPermissions() {
 
         ArrayList<String> permissionsToAsk = new ArrayList<>();
@@ -384,7 +384,17 @@ public class MainActivity extends AppCompatActivity {
             }
         }
     }
+*/
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode,
+                                           String permissions[], int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+
+        Bluetooth.processRequest(this, requestCode, permissions, grantResults);
+
+
+    }
 
     public void addLogLine(String s) {
         logger.addLogLine(s, MLogger.LOG_BOX);

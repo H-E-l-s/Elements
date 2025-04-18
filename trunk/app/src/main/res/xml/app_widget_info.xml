@@ -6,10 +6,10 @@
     android:initialLayout="@layout/app_widget"
     android:previewImage="@drawable/example_appwidget_preview"
     android:previewLayout="@layout/app_widget"
-    android:resizeMode="vertical"
-    android:targetCellWidth="3"
-    android:targetCellHeight="1"
-    android:maxResizeHeight="180dp"
+    android:resizeMode="vertical|horizontal"
+    android:targetCellWidth="4"
+    android:targetCellHeight="3"
+    android:maxResizeHeight="300dp"
     android:widgetCategory="home_screen" />
 <!--
     android:updatePeriodMillis="1800000"
