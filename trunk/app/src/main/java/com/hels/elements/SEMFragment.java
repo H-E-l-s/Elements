@@ -7,8 +7,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
@@ -36,7 +34,7 @@ import java.util.ArrayList;
 import java.util.Date;
 import java.util.Locale;
 
-public class SEMFragment extends Fragment {
+public class SEMFragment extends Fragment implements SEMSettingsListAdapter.EventListener {
 
     final String tTargetEmpty = "Target temperature: ---";
     final String tTargetC = "Target temperature: %d \u2103";
@@ -85,11 +83,12 @@ public class SEMFragment extends Fragment {
 
         semSettings = new ArrayList<>();
         semSettings.add(new SEMSettings( (Integer)null, (Integer)null, (Integer)null, SEMSettings.TYPE_LOAD));
+        semSettings.add(new SEMSettings( SEMSettings.TYPE_LOG));
         //semSettings.add(new MugSettings( (String)null, MugSettings.TYPE_MUG_NAME));
         //semSettings.add(new MugSettings( (Long)null, MugSettings.TYPE_MUG_COLOR));
         //mugSettings.add(new MugSettings("Mug color: ", MugSettings.TYPE_MUG_COLOR));
 
-        settingsListAdapter = new SEMSettingsListAdapter(context, semSettings);
+        settingsListAdapter = new SEMSettingsListAdapter(getActivity(), context, semSettings, this);
         lv_settings = (ListView) contentView.findViewById(R.id.lv_mug_settings);
         lv_settings.setAdapter(settingsListAdapter);
         layoutView = contentView;
@@ -175,26 +174,6 @@ public class SEMFragment extends Fragment {
         sw_enable.setOnCheckedChangeListener (null);
         if(mugIsEnabled) {
             sw_enable.setChecked(true);
-//            if(threadIsRunning) {
-//                MLogger.logToFile(getActivity(), "service.txt", String.format("MUG: onViewCreated: Thread is running"), true);
-//                //tv_widgetId.setText("ON");
-//                sw_enable.setText("ON");
-//
-//                context.bindService(new Intent(context, SyncService.class), mConnection, 0);
-//            }
-//            else {
-//                MLogger.logToFile(getActivity(), "service.txt", String.format("MUG: onViewCreated: Thread isn't running"), true);
-//                //tv_widgetId.setText("ON");
-//                sw_enable.setText("ON");
-//                Intent intent = new Intent(getActivity(), SyncService.class);
-//                intent.putExtra("mac", mac);
-//                intent.putExtra("widgetID", widgetID);
-//                intent.putExtra("task", "on_mug_enabled");
-//                getActivity().startService(intent);
-//
-//                context.bindService(new Intent(context, SyncService.class), mConnection, 0);
-//
-//            }
         }
         else {
             sw_enable.setChecked(false);
@@ -481,8 +460,13 @@ public class SEMFragment extends Fragment {
                 case SyncService.MSG_SET_PARAMETERS_DONE:
                     pb_BusyMug.setVisibility(View.GONE);
                     setViewAndChildrenEnabled(layoutView, true);
-                    MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: Parameters are written"), true);
+                    MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "SEM: Fragment: Parameters are written"), true);
                     requestToReadMugParameters(mac);
+                    break;
+                case SyncService.MSG_SET_24HLOG_READ_DONE:
+                    pb_BusyMug.setVisibility(View.GONE);
+                    setViewAndChildrenEnabled(layoutView, true);
+                    MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "SEM: Fragment: 24H log reading DONE"), true);
                     break;
                 default:
                     super.handleMessage(msg);
@@ -491,7 +475,7 @@ public class SEMFragment extends Fragment {
     }
 
     void requestToReadMugParameters(String mac) {
-        MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: ReRead parameters for %s", mac), true);
+        MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "SEM: Fragment: ReRead parameters for %s", mac), true);
         Message msg = Message.obtain(null,
                 SyncService.MSG_REREAD_PARAMETERS);
         msg.replyTo = mMessenger;
@@ -504,7 +488,7 @@ public class SEMFragment extends Fragment {
     }
 
     void requestToSetParameters(SolarEnergyMeterParameters semParameters) {
-        MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "MUG: Fragment: Request to set parameters %s", mac), true);
+        MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "SEM: Fragment: Request to set parameters %s", mac), true);
         Message msg = Message.obtain(null,
                 SyncService.MSG_SET_PARAMETERS);
         msg.replyTo = mMessenger;
@@ -515,6 +499,20 @@ public class SEMFragment extends Fragment {
             throw new RuntimeException(e);
         }
     }
+
+    void requestToReadLogs(SolarEnergyMeterParameters semParameters) {
+        MLogger.logToFile(getActivity(), "service.txt",  String.format(Locale.getDefault(), "SEM: Fragment: Request to read log %s", mac), true);
+        Message msg = Message.obtain(null,
+                SyncService.MSG_READ_LOG);
+        msg.replyTo = mMessenger;
+        msg.obj =  new Object[]{ semParameters, SyncService.LOG_READ_ALL };
+        try {
+            syncServiceMessenger.send(msg);
+        } catch(RemoteException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
 
     void clearInfo() {
         tv_mugName.setText("");
@@ -547,12 +545,12 @@ public class SEMFragment extends Fragment {
                     msg.obj = mac;
                     syncServiceMessenger.send(msg);
 
-                    MLogger.logToFile(getActivity(), "service.txt", "MUG: Fragment: Unbinding service " + mac, true);
+                    MLogger.logToFile(getActivity(), "service.txt", "SEM: Fragment: Unbinding service " + mac, true);
 
                 } catch (RemoteException e) {
                     // There is nothing special we need to do if the service
                     // has crashed.
-                    MLogger.logToFile(getActivity(), "service.txt", "MUG: Fragment: onStop: Unbinding service " + e.toString(), true);
+                    MLogger.logToFile(getActivity(), "service.txt", "SEM: Fragment: onStop: Unbinding service " + e.toString(), true);
                 }
             }
 
@@ -561,7 +559,7 @@ public class SEMFragment extends Fragment {
             if (mConnection != null) {
                 context.unbindService(mConnection);
                 syncServiceIsBound = false;
-                MLogger.logToFile(context, "service.txt", "MUG: Fragment: onStop: Unbinding service", true);
+                MLogger.logToFile(context, "service.txt", "SEM: Fragment: onStop: Unbinding service", true);
             }
 
         }
@@ -586,6 +584,56 @@ public class SEMFragment extends Fragment {
             }
         }
     }
+
+    public void onLog24HButtonClick() {
+        String s = "SEM: Set: ";
+
+        Integer loadOnTime = 2;
+        Integer loadOnPeriod = 1;
+        Integer loadCurent = 1;
+
+
+        long dateTime= System.currentTimeMillis()/1000;
+
+        s += new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
+        if((loadOnTime != null) && (loadOnPeriod != null) && (loadCurent != null))
+            s += String.format("On Time: %dms On Period: %dms On Current: %dma", loadOnTime, loadOnPeriod, loadCurent);
+        else s += " Something is NULL";
+
+        //setViewAndChildrenEnabled(layoutView, false);
+        pb_BusyMug.setVisibility(View.VISIBLE);
+
+        MLogger.logToFile(null, "", s, true);
+        requestToReadLogs(new SolarEnergyMeterParameters(mac, null, null, null, null, null, null, null, null, loadOnTime, loadOnPeriod, loadCurent, null, null, null, null, dateTime, null));
+
+        //clearInfo();
+
+    }
+    public void onLogReadAllButtonClick() {
+        String s = "SEM: Set: ";
+
+        Integer loadOnTime = 2;
+        Integer loadOnPeriod = 1;
+        Integer loadCurent = 1;
+
+
+        long dateTime= System.currentTimeMillis()/1000;
+
+        s += new SimpleDateFormat("yy-MM-dd h:mm:ss").format(new Date(dateTime * 1000));
+        if((loadOnTime != null) && (loadOnPeriod != null) && (loadCurent != null))
+            s += String.format("On Time: %dms On Period: %dms On Current: %dma", loadOnTime, loadOnPeriod, loadCurent);
+        else s += " Something is NULL";
+
+        //setViewAndChildrenEnabled(layoutView, false);
+        pb_BusyMug.setVisibility(View.VISIBLE);
+
+        MLogger.logToFile(null, "", s, true);
+        requestToReadLogs(new SolarEnergyMeterParameters(mac, null, null, null, null, null, null, null, null, loadOnTime, loadOnPeriod, loadCurent, null, null, null, null, dateTime, null));
+
+        //clearInfo();
+
+    }
+
     //---- End of Fragment-Service communications -------------------------------------------------
 
 

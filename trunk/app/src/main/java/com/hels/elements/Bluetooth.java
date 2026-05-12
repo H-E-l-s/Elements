@@ -20,6 +20,7 @@ public class Bluetooth {
         public final static int optionRead = 0x01;
         public final static int optionWrite = 0x02;
         public final static int optionNotification = 0x04;
+        public final static int optionIndication = 0x08;
 
         private BluetoothGattCharacteristic gattCharacteristic;
         private UUID uuid;

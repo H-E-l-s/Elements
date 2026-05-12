@@ -34,6 +34,10 @@ public class SyncService extends Service {
     static final int MSG_REREAD_PARAMETERS = 7;
     static final int MSG_UPDATE_BT_DEVICE = 8;
     static final int MSG_SET_PARAMETERS = 9;
+
+    static final int MSG_READ_LOG = 80;
+    static final int MSG_SET_24HLOG_READ_DONE   = 81;
+
     static final int MSG_SET_PARAMETERS_DONE = 91;
 
 
@@ -46,6 +50,10 @@ public class SyncService extends Service {
     static final int MSG_REQUEST_TO_BOND = 14;
 
     public final static String WIDGET_CFG = "WCFG";
+
+    public final static int LOG_READ_ALL = 1;
+    public final static int LOG_READ_24H = 2;
+    public final static int LOG_READ_1MO = 3;
 
     int mValue = 0;
     final Messenger mMessenger = new Messenger(new IncomingHandler());
@@ -398,6 +406,18 @@ public class SyncService extends Service {
                         MLogger.logToFile(getApplicationContext(), "service.txt", String.format("SRV: Request to set parameters %s", semP.getMACAddress()), true);
                         ThreadInfo ti = getThreadInfo(semP.getMACAddress());
                         ti.st.setRequestToSetParameters(semP);
+                    }
+                    break;
+                case MSG_READ_LOG:
+                    if(msg.obj != null) {
+                        Object[] msgObj = (Object[])msg.obj;
+                        //SolarEnergyMeterParameters semP = (SolarEnergyMeterParameters) msg.obj;
+                        SolarEnergyMeterParameters semP = (SolarEnergyMeterParameters)( ((Object[])msg.obj)[0] );
+                        int op = (int)( ((Object[])msg.obj)[1] );
+                        MLogger.logToFile(getApplicationContext(), "service.txt", String.format("SRV: Request to Read log(%d) %s", op, semP.getMACAddress()), true);
+                        ThreadInfo ti = getThreadInfo(semP.getMACAddress());
+                        //ti.st.setRequestToRead24HLog(semP);
+                        ti.st.setRequestToReadAllLog(semP, 0);
                     }
                     break;
                 case MSG_ENABLE_DISABLE:

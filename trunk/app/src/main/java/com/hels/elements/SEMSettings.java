@@ -4,8 +4,7 @@ public class SEMSettings {
 
     public static final int TYPE_NOT_DEF = 100;
     public static final int TYPE_LOAD = 0;
-//    public static final int TYPE_MUG_NAME = 1;
-//    public static final int TYPE_MUG_COLOR = 2;
+    public static final int TYPE_LOG = 1;
 
     private Integer loadOnTimems = null;
     private Integer loadPeriodms = null;
@@ -17,6 +16,10 @@ public class SEMSettings {
         this.loadOnTimems = loadOnTimems;
         this.loadPeriodms = loadPeriodms;
         this.loadCurrentma = loadCurrentma;
+        this.type = type;
+    }
+
+    public SEMSettings(Integer type) {
         this.type = type;
     }
 
