@@ -61,7 +61,7 @@ class MLogger {
             IntentFilter dataFilter = new IntentFilter(DataReceiver.DATA_MSG);
             dataFilter.addCategory(Intent.CATEGORY_DEFAULT);
             dataReceiver = new DataReceiver();
-            context.registerReceiver(dataReceiver, dataFilter);
+            context.registerReceiver(dataReceiver, dataFilter, Context.RECEIVER_NOT_EXPORTED);
             //------------------------------------------------------------------------------------------
         }
     }

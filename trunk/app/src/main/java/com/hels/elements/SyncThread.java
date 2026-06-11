@@ -22,8 +22,12 @@ import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 
+import android.os.Build;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
@@ -666,6 +670,7 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
                             try {
                                 if (mugGatt == null) {
                                     MLogger.logToFile(appContext, "service.txt", String.format("TH : GATT is null. connectGATT..."), true);
+                                    //mugGatt = mugBleDevice.connectGatt(appContext, true, bleGattCallback);
                                     mugGatt = mugBleDevice.connectGatt(appContext, true, bleGattCallback);
                                     refreshDeviceCache(mugGatt);
 
@@ -1314,6 +1319,7 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
         public void onCharacteristicRead(
                 BluetoothGatt gatt,
                 BluetoothGattCharacteristic characteristic,
+                byte[] value,
                 int status
         ) {
             if (status == BluetoothGatt.GATT_SUCCESS) {
@@ -1326,14 +1332,15 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 
                     //long dateTime = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT32, 0);
                     long dateTime;
-                    byte[] t = characteristic.getValue();
-                    dateTime = t[0] & 0xFF;
+                    //byte[] t = characteristic.getValue();
+
+                    dateTime = value[0] & 0xFF;
                     dateTime <<= 8;
-                    dateTime |= t[1] & 0xFF;
+                    dateTime |= value[1] & 0xFF;
                     dateTime <<= 8;
-                    dateTime |= t[2] & 0xFF;
+                    dateTime |= value[2] & 0xFF;
                     dateTime <<= 8;
-                    dateTime |= t[3] & 0xFF;
+                    dateTime |= value[3] & 0xFF;
 
                     semPList.get(semPListIdx).setDateTime(dateTime);
                     String dateString = new SimpleDateFormat("MM/dd/yyyy").format(new Date(dateTime * 1000));
@@ -1347,50 +1354,50 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 //                    long vBatMain = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 4);
 //                    long vBatBkp = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 6);
 //                    long tCPU = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 8);
-                    byte c[] = characteristic.getValue();
+                    //byte c[] = characteristic.getValue();
                     //long vBatBkp = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 12);
 
-                    long dateTime = (long) c[0] & 0xFF;
+                    long dateTime = (long) value[0] & 0xFF;
                     dateTime <<= 8;
-                    dateTime |= (long) c[1] & 0xFF;
+                    dateTime |= (long) value[1] & 0xFF;
                     dateTime <<= 8;
-                    dateTime |= (long) c[2] & 0xFF;
+                    dateTime |= (long) value[2] & 0xFF;
                     dateTime <<= 8;
-                    dateTime |= (long) c[3] & 0xFF;
+                    dateTime |= (long) value[3] & 0xFF;
 
 
-                    long vBatBkp = (long) c[18] & 0xFF;
+                    long vBatBkp = (long) value[18] & 0xFF;
                     vBatBkp <<= 8;
-                    vBatBkp |= (long) c[19] & 0xFF;
+                    vBatBkp |= (long) value[19] & 0xFF;
 
-                    long vBat = (long) c[6] & 0xFF;
+                    long vBat = (long) value[6] & 0xFF;
                     vBat <<= 8;
-                    vBat |= (long) c[7] & 0xFF;
+                    vBat |= (long) value[7] & 0xFF;
 
 
-                    long iBat = (long) c[8];
+                    long iBat = (long) value[8];
                     iBat <<= 8;
-                    iBat |= (long) c[9] & 0xFF;
+                    iBat |= (long) value[9] & 0xFF;
 
-                    long wBat = (long) c[10];
+                    long wBat = (long) value[10];
                     wBat <<= 8;
-                    wBat |= (long) c[11] & 0xFF;
+                    wBat |= (long) value[11] & 0xFF;
 
-                    long vLoad = (long) c[12] & 0xFF;
+                    long vLoad = (long) value[12] & 0xFF;
                     vLoad <<= 8;
-                    vLoad |= (long) c[13] & 0xFF;
+                    vLoad |= (long) value[13] & 0xFF;
 
-                    long iLoad = (long) c[14];
+                    long iLoad = (long) value[14];
                     iLoad <<= 8;
-                    iLoad |= (long) c[15] & 0xFF;
+                    iLoad |= (long) value[15] & 0xFF;
 
-                    long eLoad = (long) c[16];
+                    long eLoad = (long) value[16];
                     eLoad <<= 8;
-                    eLoad |= (long) c[17] & 0xFF;
+                    eLoad |= (long) value[17] & 0xFF;
 
-                    long tc = (long) c[22];
+                    long tc = (long) value[22];
                     tc <<= 8;
-                    tc |= (long) c[23] & 0xFF;
+                    tc |= (long) value[23] & 0xFF;
 
                     semPList.get(semPListIdx).setDateTime(dateTime);
 
@@ -1436,10 +1443,15 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
                 if (characteristic.getUuid().equals(UUID.fromString("fc540007-236c-4c94-8fa9-944a3e5353fa"))) {
                     //    String s = characteristic.getStringValue(0);
                     String charging = "no";
-                    int p = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0);
-                    int c = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 1);
-                    int t = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 2);
-                    int v = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 4);
+//                    int p = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 0);
+//                    int c = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 1);
+//                    int t = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 2);
+//                    int v = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT8, 4);
+                    int p = value[0];
+                    int c = value[1];
+                    int t = ((int)value[2])<<8 | value[3];
+                    int v = value[4];
+
                     if (c == 1) charging = "yes";
 
                     semPList.get(semPListIdx).setCPUBatteryCharge(p);
@@ -1457,13 +1469,16 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 
                 if (characteristic.getUuid().equals(UUID.fromString("0000fff3-0000-1000-8000-00805f9b34fb"))) {
 
-                    byte[] tmp = characteristic.getValue();
+                    //byte[] tmp = characteristic.getValue();
 
-                    semPList.get(semPListIdx).setLoadOnTime((int) tmp[1]);
-                    semPList.get(semPListIdx).setLoadOnPeriod((int) tmp[2]);
-                    semPList.get(semPListIdx).setLoadCurrent((int) tmp[3]);
+//                    semPList.get(semPListIdx).setLoadOnTime((int) tmp[1]);
+//                    semPList.get(semPListIdx).setLoadOnPeriod((int) tmp[2]);
+//                    semPList.get(semPListIdx).setLoadCurrent((int) tmp[3]);
+                    semPList.get(semPListIdx).setLoadOnTime((int) value[1]);
+                    semPList.get(semPListIdx).setLoadOnPeriod((int) value[2]);
+                    semPList.get(semPListIdx).setLoadCurrent((int) value[3]);
 
-                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d) Load: %dms %dms %dmA", tmp[1], tmp[2], tmp[3]), true);
+                    MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "TH : (#%d) Load: %dms %dms %dmA", value[1], value[2], value[3]), true);
                 }
 
                 mugGattCharsRead = true;
@@ -1499,7 +1514,8 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
         @Override
         public void onCharacteristicChanged(
                 BluetoothGatt gatt,
-                BluetoothGattCharacteristic characteristic
+                BluetoothGattCharacteristic characteristic,
+                byte[] value
         ) {
             MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: CC!!!"), true);
             Integer charId = findCharacteristicDescription(characteristic.getUuid());
@@ -1508,11 +1524,11 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
                 return;
             }
 
-            byte[] data = characteristic.getValue();
+            //byte[] data = characteristic.getValue();
 
             switch (charId) {
                 case WTS_LOG_CONTROL:
-                    bleLogger.controlResponseSet(data);
+                    bleLogger.controlResponseSet(value);
                     MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Control char has changed"), true);
                     /*
                     if ((data[0] == LogService.LOG_SERVICE_ALL_REQ) && (data[1] == LogService.LOG_SERVICE_GET_REC_NUM)) {
@@ -1532,64 +1548,64 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 */
                     break;
                 case WTS_LOG_RECORD:
-                    bleLogger.putToBuffer(data);
-                    bleLogger.appendCSVFile(data);
-                    int idx = Utils.intFromByteArray(data, 0, 4);
-                    int dt = Utils.intFromByteArray(data, 4, 8);
+                    bleLogger.putToBuffer(value);
+                    bleLogger.appendCSVFile(value);
+                    int idx = Utils.intFromByteArray(value, 0, 4);
+                    int dt = Utils.intFromByteArray(value, 4, 8);
                     MLogger.logToFile(appContext, "service.txt", String.format(Locale.getDefault(), "BLE: Record received: %d %08X", idx, dt), true);
                     //if( dt == 0x66DBD920 ) testquit = true;
 
                     {   // temp debug only
 
-                        byte c[] = characteristic.getValue();
+                        //byte c[] = characteristic.getValue();
                         //long vBatBkp = characteristic.getIntValue(BluetoothGattCharacteristic.FORMAT_UINT16, 12);
 
-                        long dateTime = (long) c[4] & 0xFF;
+                        long dateTime = (long) value[4] & 0xFF;
                         dateTime <<= 8;
-                        dateTime |= (long) c[5] & 0xFF;
+                        dateTime |= (long) value[5] & 0xFF;
                         dateTime <<= 8;
-                        dateTime |= (long) c[6] & 0xFF;
+                        dateTime |= (long) value[6] & 0xFF;
                         dateTime <<= 8;
-                        dateTime |= (long) c[7] & 0xFF;
+                        dateTime |= (long) value[7] & 0xFF;
 
                         String dateString = new SimpleDateFormat("MM/dd/yyyy").format(new Date(dateTime * 1000));
 
-                        //Log.d("L-DATA", String.format("%02X%02X%02X%02X%02X%02X%02X%02X", c[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8]) );
+                        //Log.d("L-DATA", String.format("%02X%02X%02X%02X%02X%02X%02X%02X", value[0], c[1], c[2], c[3], c[4], c[5], c[6], c[7], c[8]) );
                         //Log.d("L-DATA", String.format(" );
 
-                        long vBatBkp = (long) c[22] & 0xFF;
+                        long vBatBkp = (long) value[22] & 0xFF;
                         vBatBkp <<= 8;
-                        vBatBkp |= (long) c[23] & 0xFF;
+                        vBatBkp |= (long) value[23] & 0xFF;
 
-                        long vBat = (long) c[10] & 0xFF;
+                        long vBat = (long) value[10] & 0xFF;
                         vBat <<= 8;
-                        vBat |= (long) c[11] & 0xFF;
+                        vBat |= (long) value[11] & 0xFF;
 
-                        long iBat = (long) c[12];
+                        long iBat = (long) value[12];
                         iBat <<= 8;
-                        iBat |= (long) c[13] & 0xFF;
+                        iBat |= (long) value[13] & 0xFF;
 
                         //Log.d("L-DATA", String.format("%s vBat: %d iBat: %d Vbkp: %d ", dateString, vBat, iBat, vBatBkp));
 
-                        long wBat = (long) c[10+4];
+                        long wBat = (long) value[10+4];
                         wBat <<= 8;
-                        wBat |= (long) c[11+4] & 0xFF;
+                        wBat |= (long) value[11+4] & 0xFF;
 
-                        long vLoad = (long) c[12+4] & 0xFF;
+                        long vLoad = (long) value[12+4] & 0xFF;
                         vLoad <<= 8;
-                        vLoad |= (long) c[13+4] & 0xFF;
+                        vLoad |= (long) value[13+4] & 0xFF;
 
-                        long iLoad = (long) c[14+4];
+                        long iLoad = (long) value[14+4];
                         iLoad <<= 8;
-                        iLoad |= (long) c[15+4] & 0xFF;
+                        iLoad |= (long) value[15+4] & 0xFF;
 
-                        long eLoad = (long) c[16+4];
+                        long eLoad = (long) value[16+4];
                         eLoad <<= 8;
-                        eLoad |= (long) c[17+4] & 0xFF;
+                        eLoad |= (long) value[17+4] & 0xFF;
 
-                        long tc = (long) c[22+4];
+                        long tc = (long) value[22+4];
                         tc <<= 8;
-                        tc |= (long) c[23+4] & 0xFF;
+                        tc |= (long) value[23+4] & 0xFF;
 
                         Log.d("L-DATA", String.format("%s vBat: %d iBat: %d Vbkp: %d ", dateString, vBat, iBat, vBatBkp));
                     }
@@ -1700,7 +1716,10 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 
             }
             if (BluetoothDevice.ACTION_FOUND.equals(action)) {
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                BluetoothDevice device = null;
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);
+                }
 
                 if (ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED) {
                     return;
@@ -1757,7 +1776,10 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
                 }
             }
             if (BluetoothDevice.ACTION_PAIRING_REQUEST.equals(action)) {
-                BluetoothDevice device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE);
+                BluetoothDevice device = null;
+                if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    device = intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE, BluetoothDevice.class);
+                }
                 String deviceName = device.getName();
                 MLogger.logToFile(appContext, "service.txt", String.format("TH : pairing request %s", deviceName), true);
 //                int type = intent.getIntExtra(BluetoothDevice.EXTRA_PAIRING_VARIANT, BluetoothDevice.ERROR);
@@ -2248,8 +2270,10 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 
             mugGattCharWritten = false;
 
-            bleCharacteristics.get(i).getGattCharacteristic().setValue(string);
+            //bleCharacteristics.get(i).getGattCharacteristic().setValue(string); ????
 
+
+            /*
             switch (type) {
                 case WRITE_STRING:
                     bleCharacteristics.get(i).getGattCharacteristic().setValue((String) value);
@@ -2263,7 +2287,26 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
             }
 
             bleCharacteristics.get(i).getGattCharacteristic().setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-            mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic());
+
+             */
+
+            switch(type) {
+                case WRITE_STRING:
+                    //mugCharacteristics.get(i).getGattCharacteristic().setValue((String)value );
+                    mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic(), ((String)value).getBytes(StandardCharsets.UTF_8), BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE );
+                    break;
+                case WRITE_UINT16:
+                    //mugCharacteristics.get(i).getGattCharacteristic().setValue((int)value , BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+                    mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic(),
+                            ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt((Integer)value).array(),
+                            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE );
+                    break;
+                case WRITE_ARRAY:
+                    //mugCharacteristics.get(i).getGattCharacteristic().setValue((byte[])value );
+                    mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic(), (byte[])value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE );
+                    break;
+            }
+
 
             int timeout = 5000 / 10;  //5 sec
             while (!mugGattCharWritten && !checkStop() && checkBTEnabled() && mugGattConnected) {
@@ -2340,22 +2383,39 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
 
             mugGattCharWritten = false;
 
-            bleCharacteristics.get(i).getGattCharacteristic().setValue(string);
+            //bleCharacteristics.get(i).getGattCharacteristic().setValue(string); ???
 
-            switch (type) {
+//            switch (type) {
+//                case WRITE_STRING:
+//                    bleCharacteristics.get(i).getGattCharacteristic().setValue((String) value);
+//                    break;
+//                case WRITE_UINT16:
+//                    bleCharacteristics.get(i).getGattCharacteristic().setValue((int) value, BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+//                    break;
+//                case WRITE_ARRAY:
+//                    bleCharacteristics.get(i).getGattCharacteristic().setValue((byte[]) value);
+//                    break;
+//            }
+//
+//            bleCharacteristics.get(i).getGattCharacteristic().setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
+//            mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic());
+
+            switch(type) {
                 case WRITE_STRING:
-                    bleCharacteristics.get(i).getGattCharacteristic().setValue((String) value);
+                    //mugCharacteristics.get(i).getGattCharacteristic().setValue((String)value );
+                    mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic(), ((String)value).getBytes(StandardCharsets.UTF_8), BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE );
                     break;
                 case WRITE_UINT16:
-                    bleCharacteristics.get(i).getGattCharacteristic().setValue((int) value, BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+                    //mugCharacteristics.get(i).getGattCharacteristic().setValue((int)value , BluetoothGattCharacteristic.FORMAT_UINT16, 0);
+                    mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic(),
+                            ByteBuffer.allocate(4).order(ByteOrder.LITTLE_ENDIAN).putInt((Integer)value).array(),
+                            BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE );
                     break;
                 case WRITE_ARRAY:
-                    bleCharacteristics.get(i).getGattCharacteristic().setValue((byte[]) value);
+                    //mugCharacteristics.get(i).getGattCharacteristic().setValue((byte[])value );
+                    mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic(), (byte[])value, BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE );
                     break;
             }
-
-            bleCharacteristics.get(i).getGattCharacteristic().setWriteType(BluetoothGattCharacteristic.WRITE_TYPE_NO_RESPONSE);
-            mugGatt.writeCharacteristic(bleCharacteristics.get(i).getGattCharacteristic());
 
             int timeout = 5000 / 10;  //5 sec
             while (!mugGattCharWritten && !checkStop() && checkBTEnabled() && mugGattConnected) {
@@ -2418,9 +2478,13 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
             mugGatt.setCharacteristicNotification(bleCharacteristics.get(i).getGattCharacteristic(), true);
 
             UUID CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+
+            /*
             BluetoothGattDescriptor desc = bleCharacteristics.get(i).getGattCharacteristic().getDescriptor(CONFIG_DESCRIPTOR);
             desc.setValue(BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
-            mugGatt.writeDescriptor(desc);
+            mugGatt.writeDescriptor(desc);*/
+
+            mugGatt.writeDescriptor(bleCharacteristics.get(i).getGattCharacteristic().getDescriptor(CONFIG_DESCRIPTOR), BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE);
 
             int timeout = 5000 / 10;  //5 sec
             while (!mugGattDescriptorWritten && !checkStop() && checkBTEnabled() && mugGattConnected) {
@@ -2482,9 +2546,15 @@ public class SyncThread implements Runnable, BLELogger.BLECharacteristicIO {
             mugGatt.setCharacteristicNotification(bleCharacteristics.get(i).getGattCharacteristic(), true);
 
             UUID CONFIG_DESCRIPTOR = UUID.fromString("00002902-0000-1000-8000-00805f9b34fb");
+
+            /*
             BluetoothGattDescriptor desc = bleCharacteristics.get(i).getGattCharacteristic().getDescriptor(CONFIG_DESCRIPTOR);
             desc.setValue(BluetoothGattDescriptor.ENABLE_INDICATION_VALUE);
+
             mugGatt.writeDescriptor(desc);
+             */
+
+            mugGatt.writeDescriptor(bleCharacteristics.get(i).getGattCharacteristic().getDescriptor(CONFIG_DESCRIPTOR), BluetoothGattDescriptor.ENABLE_INDICATION_VALUE );
 
             int timeout = 5000 / 10;  //5 sec
             while (!mugGattDescriptorWritten && !checkStop() && checkBTEnabled() && mugGattConnected) {

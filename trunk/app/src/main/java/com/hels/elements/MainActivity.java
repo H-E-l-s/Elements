@@ -61,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
     Messenger mService = null;
     boolean isBound = false;
-    final Messenger mMessenger = new Messenger(new IncomingHandler());
+    final Messenger mMessenger = new Messenger(new IncomingHandler(Looper.getMainLooper()));
 
 
 
@@ -500,6 +500,11 @@ public class MainActivity extends AppCompatActivity {
 
     //---- Service to activity communication ------------------------------------------------------
     class IncomingHandler extends Handler {
+
+        public IncomingHandler(Looper looper) {
+            super(looper);
+        }
+
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {

@@ -1,5 +1,7 @@
 package com.hels.elements;
 
+import static android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
+
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -11,6 +13,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
@@ -20,6 +23,7 @@ import androidx.core.app.NotificationCompat;
 
 import java.util.ArrayList;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.Set;
 
 public class SyncService extends Service {
@@ -56,7 +60,7 @@ public class SyncService extends Service {
     public final static int LOG_READ_1MO = 3;
 
     int mValue = 0;
-    final Messenger mMessenger = new Messenger(new IncomingHandler());
+    final Messenger mMessenger = new Messenger(new IncomingHandler(Looper.getMainLooper()));
 
 
     class ThreadInfo {
@@ -110,7 +114,7 @@ public class SyncService extends Service {
                 .setSmallIcon(R.drawable.cup_10_128x128_neonblue)
                 .setContentIntent(pendingIntent)
                 .build();
-        startForeground(1, notification);
+        startForeground(1, notification, FOREGROUND_SERVICE_TYPE_DATA_SYNC);
         //do heavy work on a background thread
 
         if(intent != null ) {
@@ -186,7 +190,7 @@ public class SyncService extends Service {
                         String threadName = String.format("*%s_paired", getPackageName());
 
                         //String[] macList = intent.getStringArrayExtra("mac_list");
-                        ArrayList<SolarEnergyMeterParameters> semPList = intent.getExtras().getParcelableArrayList("mugs_list");
+                        ArrayList<SolarEnergyMeterParameters> semPList = Objects.requireNonNull(intent.getExtras()).getParcelableArrayList("mugs_list", SolarEnergyMeterParameters.class);
 
                         SyncThread st = new SyncThread(getApplicationContext(), semPList, SyncThread.TASK_GET_PAIRED_INFO);
 
@@ -259,7 +263,8 @@ public class SyncService extends Service {
     @Override
     public void onDestroy() {
         super.onDestroy();
-        stopForeground(true);
+        //stopForeground(true);
+        stopForeground(Service.STOP_FOREGROUND_REMOVE);
         Toast.makeText(this, "Notification Service destroyed by user.", Toast.LENGTH_LONG).show();
         //Log.d("SERVICE", "DESTROYED");
         MLogger.logToFile(getApplicationContext(), "service.txt", "SRV: onDestroy", true);
@@ -294,6 +299,11 @@ public class SyncService extends Service {
 //        IncomingHandler(Context context) {
 //            applicationContext = context.getApplicationContext();
 //        }
+
+        public IncomingHandler(Looper looper) {
+
+            super(looper);
+        }
 
         @Override
         public void handleMessage(Message msg) {

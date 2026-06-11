@@ -15,6 +15,7 @@ import android.content.pm.PackageManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.IBinder;
+import android.os.Looper;
 import android.os.Message;
 import android.os.Messenger;
 import android.os.RemoteException;
@@ -274,7 +275,7 @@ public class AppWidgetConfigureActivity extends Activity {
 
     //---- Fragment-Service communications --------------------------------------------------------
 
-    final Messenger mMessenger = new Messenger(new SyncServiceIncomingHandler());
+    final Messenger mMessenger = new Messenger(new SyncServiceIncomingHandler(Looper.getMainLooper()));
     private ServiceConnection mConnection = new ServiceConnection() {
         public void onServiceConnected(ComponentName className, IBinder service) {
             // This is called when the connection with the service has been
@@ -317,6 +318,9 @@ public class AppWidgetConfigureActivity extends Activity {
     };
 
     class SyncServiceIncomingHandler extends Handler {
+        public SyncServiceIncomingHandler(Looper looper) {
+            super(looper);
+        }
         @Override
         public void handleMessage(Message msg) {
             switch (msg.what) {
